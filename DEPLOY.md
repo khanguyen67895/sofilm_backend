@@ -2,9 +2,10 @@
 
 How to ship a new version of the app to the single-EC2 host once the AWS
 infrastructure exists (VPC, EC2, ECR, Elastic IP, an IAM role with SSM +
-ECR-pull permissions attached to the instance). This repo doesn't include an
-infra-provisioning script (no CDK/Terraform yet) — provision those pieces by
-hand or copy the pattern from a sibling project, then fill in the table below.
+ECR-pull permissions attached to the instance). For first-time provisioning of
+those pieces, use the AWS CDK app in [`infra/cdk`](./infra/cdk/README.md) — it
+prints the values for the table below (`InstanceId`, `EcrUri`, `PublicIp`) as
+deploy outputs, so you don't have to hunt for them in the Console.
 
 The host runs the whole stack from [`docker-compose.prod.yml`](./docker-compose.prod.yml):
 all 11 NestJS apps + self-hosted Postgres, Redis, Elasticsearch, MinIO, and a
@@ -51,12 +52,18 @@ Secrets and variables → Actions): `AWS_REGION`, `ECR_REPOSITORY`,
 
 ### Provisioning checklist (do this once, before the first deploy)
 
-1. **ECR repo** — `aws ecr create-repository --repository-name sofilm-app --region <region>` (or via Console: ECR → Create repository). This is the value for the `ECR_REPOSITORY` secret.
-2. **IAM role on the EC2 instance** — attach a role with `AmazonSSMManagedInstanceCore` (so `aws ssm send-command`/`start-session` work) and ECR pull permissions (`AmazonEC2ContainerRegistryReadOnly` is enough — the instance only ever pulls, CI does the pushing). EC2 Console → your instance → Actions → Security → Modify IAM role.
-3. **Docker on the host** — SSH or SSM into the instance and install Docker + the Compose plugin if it isn't already there (`sudo yum install -y docker` + enable the service on Amazon Linux, or the Docker convenience script on Ubuntu).
-4. **App directory on the host** — `sudo mkdir -p /opt/sofilm-backend`, then get `docker-compose.prod.yml` and `Caddyfile` onto it (either `git clone` the repo there, or `scp` just those two files — see "First-time / fresh-host configuration" below for `.env.prod`).
+Steps 1–4 are all handled by `cd infra/cdk && npm install && npx cdk deploy`
+(see [`infra/cdk/README.md`](./infra/cdk/README.md)) — it creates the VPC, EC2
+instance (with the SSM + ECR-pull IAM role attached), Elastic IP, ECR repo,
+installs Docker on boot, and clones this repo to `/opt/sofilm-backend`. Steps
+5–6 are still manual (they're GitHub-side, not AWS-side):
+
+1. ~~ECR repo~~ — created by `cdk deploy` (`sofilm-app`, the `EcrUri` output). This is the value for the `ECR_REPOSITORY` secret.
+2. ~~IAM role on the EC2 instance~~ — attached by `cdk deploy` (`AmazonSSMManagedInstanceCore` + `AmazonEC2ContainerRegistryReadOnly`).
+3. ~~Docker on the host~~ — installed by the instance's user-data on first boot.
+4. ~~App directory on the host~~ — `/opt/sofilm-backend` is `git clone`d by user-data; you still need to create `.env.prod` there yourself (see "First-time / fresh-host configuration" below — it's git-ignored on purpose).
 5. **IAM user/keys for GitHub Actions** — create an IAM user (or better, set up OIDC federation later) with ECR push + SSM send-command permissions, generate an access key, and put it in the `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` GitHub secrets. Keep this separate from your own personal AWS credentials.
-6. **`git init` + push to GitHub** — this repo has no git history yet locally; the whole CI/CD pipeline only runs once it's a GitHub repo with the 5 secrets set (Settings → Secrets and variables → Actions).
+6. **Push to GitHub + set the 5 secrets** — the CI/CD pipeline (`.github/workflows/deploy.yml`, triggers on push to `main`) only runs once the repo is on GitHub with all 5 secrets set (Settings → Secrets and variables → Actions).
 
 ---
 

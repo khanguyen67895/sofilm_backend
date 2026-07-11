@@ -1,6 +1,8 @@
 # compiled output
 /dist
 /node_modules
+infra/cdk/node_modules
+infra/cdk/cdk.out
 
 # logs
 *.log

@@ -72,6 +72,9 @@ jobs:
         with:
           context: .
           file: Dockerfile
+          # EC2 host is x86_64 — pin the platform explicitly so this never
+          # silently produces an arm64 image (see DEPLOY.md gotcha #1).
+          platforms: linux/amd64
           push: true
           tags: |
             ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
@@ -128,7 +131,8 @@ jobs:
               'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY',
               'docker pull $APP_IMAGE',
               'APP_IMAGE=$APP_IMAGE docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build',
-              'docker image prune -f'
+              'docker image prune -f',
+              'for i in \$(seq 1 15); do curl -sf http://localhost:3000/health && exit 0; echo \"waiting for gateway (\$i/15)\"; sleep 4; done; echo \"gateway did not become healthy\"; docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail=80 gateway; exit 1'
             ]" \
             --query "Command.CommandId" --output text)
 
