@@ -1,0 +1,150 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+# Newer run for the same ref supersedes an in-flight one.
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+
+jobs:
+  # ── Lint + typecheck (runs on every push/PR) ────────────────────────────────
+  test:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint:ci
+
+      - name: Typecheck (all apps + libs)
+        run: npx tsc -p tsconfig.build.json --noEmit
+
+      - name: Build every app (webpack-bundles each into dist/apps/<name>/main.js)
+        run: npm run build:all
+
+  # ── Build & push image (main pushes or manual runs only) ────────────────────
+  build:
+    name: Build & Push Image
+    needs: test
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          # Layer cache in GitHub Actions: the `npm ci` layer is reused across
+          # runs when the lockfile is unchanged, so deps aren't re-downloaded
+          # every build.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+
+  # ── Deploy to the EC2 host via SSM (main pushes or manual runs only) ─────────
+  deploy:
+    name: Deploy to EC2
+    needs: build
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Deploy via SSM
+        env:
+          INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          APP_IMAGE: ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          # Notes on the host commands:
+          # - The deploy target is the pushed image in ECR; the EC2 host doesn't
+          #   need GitHub credentials just to roll forward to a new image.
+          # - $APP_IMAGE / $REGISTRY / $AWS_REGION expand here on the runner, so
+          #   the host receives fully-resolved commands.
+          # - compose interpolates ${APP_IMAGE} from the prefixed env var.
+          # - Infra files (docker-compose.prod.yml, Caddyfile, .env.prod) are
+          #   expected to already be provisioned on the box — CI only updates
+          #   the application image, it doesn't push config files.
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy ${{ github.sha }}" \
+            --parameters "commands=[
+              'set -euxo pipefail',
+              'cd /opt/sofilm-backend',
+              'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY',
+              'docker pull $APP_IMAGE',
+              'APP_IMAGE=$APP_IMAGE docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build',
+              'docker image prune -f'
+            ]" \
+            --query "Command.CommandId" --output text)
+
+          echo "SSM command ID: $COMMAND_ID"
+
+          # Don't fail the step on the waiter itself — we want to print output first.
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" || true
+
+          echo "----- STATUS / STDOUT / STDERR -----"
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "[Status, StandardOutputContent, StandardErrorContent]" --output text
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" \
+            --query "Status" --output text)
+          echo "Final status: $STATUS"
+          test "$STATUS" = "Success"

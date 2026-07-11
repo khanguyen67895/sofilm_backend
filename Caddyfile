@@ -1,0 +1,9 @@
+# Reverse proxy for the SoFilm API. Address comes from the API_DOMAIN env var.
+# No scheme prefix — Caddy auto-provisions a Let's Encrypt cert for a real
+# domain and serves HTTPS. A raw-IP smoke test needs `http://{$API_DOMAIN}`
+# instead, since Let's Encrypt won't issue certs for bare IPs.
+
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy gateway:3000
+}

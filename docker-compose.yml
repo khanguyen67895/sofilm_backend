@@ -1,0 +1,163 @@
+# Infra only:  docker compose up -d
+# Infra + every service (built from the local Dockerfile):
+#   docker compose --profile apps up -d --build
+name: sofilm
+
+x-app: &app
+  build: { context: ., dockerfile: Dockerfile }
+  image: sofilm-app:latest
+  profiles: ["apps"]
+  env_file: .env
+  environment:
+    DB_HOST: postgres
+    REDIS_HOST: redis
+    ELASTICSEARCH_NODE: http://elasticsearch:9200
+    S3_ENDPOINT: http://minio:9000
+    MAIL_HOST: mailhog
+    AUTH_SERVICE_URL: http://auth:3001
+    USER_SERVICE_URL: http://user:3002
+    MOVIE_SERVICE_URL: http://movie:3003
+    VIDEO_SERVICE_URL: http://video:3004
+    SEARCH_SERVICE_URL: http://search:3005
+    HISTORY_SERVICE_URL: http://history:3006
+    RECOMMENDATION_SERVICE_URL: http://recommendation:3007
+    PAYMENT_SERVICE_URL: http://payment:3008
+    NOTIFICATION_SERVICE_URL: http://notification:3009
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sofilm-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sofilm
+      POSTGRES_PASSWORD: sofilm
+      POSTGRES_MULTIPLE_DATABASES: auth_db,user_db,movie_db,video_db,history_db,payment_db,notification_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sofilm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: sofilm-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: sofilm-elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  # One-time manual setup after `docker compose up -d` (no bucket-init step runs automatically):
+  #   1. Open http://localhost:9001, log in with sofilm / sofilm123
+  #   2. Create a bucket named "sofilm-media" (must match S3_BUCKET in .env)
+  #   3. Set its Access Policy to "public" (read) so CDN_BASE_URL-constructed URLs are servable
+  # Equivalent via the mc CLI:
+  #   mc alias set local http://localhost:9000 sofilm sofilm123
+  #   mc mb local/sofilm-media
+  #   mc anonymous set download local/sofilm-media
+  minio:
+    image: minio/minio:latest
+    container_name: sofilm-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: sofilm
+      MINIO_ROOT_PASSWORD: sofilm123
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: sofilm-mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  # ── Application services (opt-in via `--profile apps`) ──────────────────────
+  # All share one image built from this repo's Dockerfile; each just overrides `command`.
+  gateway:
+    <<: *app
+    command: node dist/apps/gateway/main.js
+    ports: ["3000:3000"]
+
+  auth:
+    <<: *app
+    command: node dist/apps/auth/main.js
+    ports: ["3001:3001"]
+
+  user:
+    <<: *app
+    command: node dist/apps/user/main.js
+    ports: ["3002:3002"]
+
+  movie:
+    <<: *app
+    command: node dist/apps/movie/main.js
+    ports: ["3003:3003"]
+
+  video:
+    <<: *app
+    command: node dist/apps/video/main.js
+    ports: ["3004:3004"]
+
+  search:
+    <<: *app
+    command: node dist/apps/search/main.js
+    ports: ["3005:3005"]
+
+  history:
+    <<: *app
+    command: node dist/apps/history/main.js
+    ports: ["3006:3006"]
+
+  recommendation:
+    <<: *app
+    command: node dist/apps/recommendation/main.js
+    ports: ["3007:3007"]
+
+  payment:
+    <<: *app
+    command: node dist/apps/payment/main.js
+    ports: ["3008:3008"]
+
+  notification:
+    <<: *app
+    command: node dist/apps/notification/main.js
+    ports: ["3009:3009"]
+
+  transcoder:
+    <<: *app
+    command: node dist/apps/transcoder/main.js
+    # no ports — pure BullMQ worker, no HTTP server
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  minio_data:

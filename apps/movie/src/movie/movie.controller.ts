@@ -1,0 +1,107 @@
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public, Roles } from '@app/auth';
+import { PaginationQueryDto } from '@app/common';
+import { MovieService } from './movie.service';
+import { CreateMovieDto } from './dto/create-movie.dto';
+import { UpdateMovieDto } from './dto/update-movie.dto';
+import { BatchMoviesDto } from './dto/movie-query.dto';
+
+@ApiTags('movies')
+@Controller('movies')
+export class MovieController {
+  constructor(private readonly movieService: MovieService) {}
+
+  @Roles('ADMIN')
+  @Post()
+  @ApiOperation({ summary: 'Create a movie/series' })
+  create(@Body() dto: CreateMovieDto) {
+    return this.movieService.create(dto);
+  }
+
+  @Public()
+  @Post('batch')
+  @ApiOperation({ summary: 'Hydrate a list of movie ids (used by history/recommendation)' })
+  batch(@Body() dto: BatchMoviesDto) {
+    return this.movieService.batchByIds(dto.ids);
+  }
+
+  @Roles('ADMIN')
+  @Get('admin/list')
+  @ApiOperation({ summary: 'Paginated admin listing of all movies/series' })
+  adminList(@Query() query: PaginationQueryDto) {
+    return this.movieService.adminList(query);
+  }
+
+  @Roles('ADMIN')
+  @Get('by-id/:id')
+  @ApiOperation({ summary: 'Movie/series detail by id (for the admin edit form)' })
+  findById(@Param('id') id: string) {
+    return this.movieService.findById(id);
+  }
+
+  @Roles('ADMIN')
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update a movie/series' })
+  update(@Param('id') id: string, @Body() dto: UpdateMovieDto) {
+    return this.movieService.update(id, dto);
+  }
+
+  @Public()
+  @Get('trending')
+  @ApiOperation({ summary: 'Trending movies (Redis-cached)' })
+  trending(@Query('limit') limit?: number) {
+    return this.movieService.trending(limit ? Number(limit) : undefined);
+  }
+
+  @Public()
+  @Get('latest')
+  @ApiOperation({ summary: 'Latest additions' })
+  latest(@Query('limit') limit?: number) {
+    return this.movieService.latest(limit ? Number(limit) : undefined);
+  }
+
+  @Public()
+  @Get('top-view')
+  @ApiOperation({ summary: 'All-time most-viewed' })
+  topView(@Query('limit') limit?: number) {
+    return this.movieService.topView(limit ? Number(limit) : undefined);
+  }
+
+  @Public()
+  @Get('search')
+  @ApiOperation({ summary: 'Simple title search (see search-service for full-text/ES search)' })
+  search(@Query('q') q: string, @Query() query: PaginationQueryDto) {
+    return this.movieService.search(q ?? '', query);
+  }
+
+  @Public()
+  @Get('category/:categorySlug')
+  @ApiOperation({ summary: 'Movies within a category, paginated' })
+  byCategory(@Param('categorySlug') categorySlug: string, @Query() query: PaginationQueryDto) {
+    return this.movieService.byCategory(categorySlug, query);
+  }
+
+  @Public()
+  @Get(':slug')
+  @ApiOperation({ summary: 'Full movie/series detail (seasons + episodes + cast)' })
+  findBySlug(@Param('slug') slug: string) {
+    return this.movieService.findBySlug(slug);
+  }
+
+  @Public()
+  @Get(':slug/recommend')
+  @ApiOperation({ summary: 'Same-genre recommendations for this title' })
+  recommend(@Param('slug') slug: string, @Query('limit') limit?: number) {
+    return this.movieService.recommend(slug, limit ? Number(limit) : undefined);
+  }
+
+  @Public()
+  @Post(':slug/views')
+  @ApiOperation({
+    summary: 'Increment view/trending counters (called when a watch session starts)',
+  })
+  incrementViews(@Param('slug') slug: string) {
+    return this.movieService.incrementViews(slug);
+  }
+}

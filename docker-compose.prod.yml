@@ -1,0 +1,172 @@
+# Production stack for a single host (lift-and-shift of the dev compose).
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# Everything runs on one box: Postgres + Redis + Elasticsearch + MinIO
+# (self-hosted, persistent volumes), all 11 NestJS apps, and a Caddy reverse
+# proxy that terminates TLS. Only Caddy (80/443) is published; every other
+# service talks over the private compose network. The gateway is the only
+# app Caddy forwards to — it already reverse-proxies every other service
+# internally (see apps/gateway/src/proxy/proxy-config.service.ts).
+name: sofilm
+
+x-app: &app
+  image: ${APP_IMAGE:-sofilm-app:latest}
+  build: { context: ., dockerfile: Dockerfile }
+  restart: unless-stopped
+  environment:
+    NODE_ENV: production
+    DB_HOST: postgres
+    DB_USERNAME: ${POSTGRES_USER:-sofilm}
+    DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+    REDIS_HOST: redis
+    ELASTICSEARCH_NODE: http://elasticsearch:9200
+    S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-sofilm}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env.prod}
+    S3_BUCKET: ${S3_BUCKET:-sofilm-media}
+    CDN_BASE_URL: ${CDN_BASE_URL:-}
+    MAIL_HOST: ${MAIL_HOST:-mailhog}
+    MAIL_PORT: ${MAIL_PORT:-1025}
+    MAIL_FROM: ${MAIL_FROM:-SoFilm <no-reply@sofilm.dev>}
+    JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env.prod}
+    JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env.prod}
+    AUTH_SERVICE_URL: http://auth:3001
+    USER_SERVICE_URL: http://user:3002
+    MOVIE_SERVICE_URL: http://movie:3003
+    VIDEO_SERVICE_URL: http://video:3004
+    SEARCH_SERVICE_URL: http://search:3005
+    HISTORY_SERVICE_URL: http://history:3006
+    RECOMMENDATION_SERVICE_URL: http://recommendation:3007
+    PAYMENT_SERVICE_URL: http://payment:3008
+    NOTIFICATION_SERVICE_URL: http://notification:3009
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  # ── Data + search + object storage (self-hosted, persistent) ────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sofilm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+      POSTGRES_MULTIPLE_DATABASES: auth_db,user_db,movie_db,video_db,history_db,payment_db,notification_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-multiple-dbs.sh:/docker-entrypoint-initdb.d/init-multiple-dbs.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-sofilm}']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: 'false'
+      ES_JAVA_OPTS: '-Xms512m -Xmx512m'
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-sofilm}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env.prod}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  # ── NestJS services (shared image, per-service command) ─────────────────────
+  gateway:
+    <<: *app
+    command: node dist/apps/gateway/main.js
+    environment:
+      GATEWAY_PORT: 3000
+      THROTTLE_TTL: ${THROTTLE_TTL:-60}
+      THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
+    depends_on: [auth, user, movie, video, search, history, recommendation, payment, notification]
+
+  auth:
+    <<: *app
+    command: node dist/apps/auth/main.js
+    environment: { AUTH_PORT: 3001, AUTH_DB_NAME: auth_db }
+
+  user:
+    <<: *app
+    command: node dist/apps/user/main.js
+    environment: { USER_PORT: 3002, USER_DB_NAME: user_db }
+
+  movie:
+    <<: *app
+    command: node dist/apps/movie/main.js
+    environment: { MOVIE_PORT: 3003, MOVIE_DB_NAME: movie_db }
+
+  video:
+    <<: *app
+    command: node dist/apps/video/main.js
+    environment: { VIDEO_PORT: 3004, VIDEO_DB_NAME: video_db }
+
+  search:
+    <<: *app
+    command: node dist/apps/search/main.js
+    environment: { SEARCH_PORT: 3005 }
+
+  history:
+    <<: *app
+    command: node dist/apps/history/main.js
+    environment: { HISTORY_PORT: 3006, HISTORY_DB_NAME: history_db }
+
+  recommendation:
+    <<: *app
+    command: node dist/apps/recommendation/main.js
+    environment: { RECOMMENDATION_PORT: 3007 }
+
+  payment:
+    <<: *app
+    command: node dist/apps/payment/main.js
+    environment: { PAYMENT_PORT: 3008, PAYMENT_DB_NAME: payment_db }
+
+  notification:
+    <<: *app
+    command: node dist/apps/notification/main.js
+    environment: { NOTIFICATION_PORT: 3009, NOTIFICATION_DB_NAME: notification_db }
+
+  transcoder:
+    <<: *app
+    command: node dist/apps/transcoder/main.js
+    # no ports — pure BullMQ worker, no HTTP server
+
+  # ── Reverse proxy: TLS termination for the gateway only ────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      API_DOMAIN: ${API_DOMAIN:-api.localhost}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [gateway]
+
+volumes:
+  postgres_data:
+  redis_data:
+  elasticsearch_data:
+  minio_data:
+  caddy_data:
+  caddy_config:
