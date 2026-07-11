@@ -18,7 +18,7 @@ export class ProxyController {
    * and logs.
    */
   @Public()
-  @All('*path')
+  @All('*')
   async forward(@Req() req: Request, @Res() res: Response) {
     if (req.path === '/health') {
       return res.status(200).json({ status: 'ok', service: 'gateway' });
