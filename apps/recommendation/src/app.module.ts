@@ -14,8 +14,9 @@ import { RecommendationModule } from './recommendation/recommendation.module';
     LoggerModule,
     RedisModule,
     AuthLibModule,
-    // Registered app-wide so every feature module can just inject HttpService
-    // without each one re-declaring its own HttpModule.register(...).
+    // Also imported by RecommendationModule itself — Nest module DI is
+    // encapsulated, so importing HttpModule here does not make HttpService
+    // available to feature modules; each one that injects it must import it too.
     HttpModule.register({ timeout: 10000 }),
     RecommendationModule,
   ],
