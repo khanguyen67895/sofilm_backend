@@ -35,5 +35,6 @@
       "@app/logger": ["libs/logger/src"],
       "@app/logger/*": ["libs/logger/src/*"]
     }
-  }
+  },
+  "exclude": ["node_modules", "dist", "infra"]
 }
