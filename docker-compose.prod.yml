@@ -96,6 +96,11 @@ services:
       GATEWAY_PORT: 3000
       THROTTLE_TTL: ${THROTTLE_TTL:-60}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
+    # Loopback-only publish so the deploy pipeline's health check can curl it
+    # directly from the host — not internet-reachable (the security group
+    # only opens 80/443 anyway; this is a second layer of defense).
+    ports:
+      - '127.0.0.1:3000:3000'
     depends_on: [auth, user, movie, video, search, history, recommendation, payment, notification]
 
   auth:
