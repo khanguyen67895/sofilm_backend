@@ -1,3 +1,4 @@
+import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Invoice } from '../entities/invoice.entity';
@@ -16,6 +17,7 @@ import { PaymentService } from './payment.service';
     SubscriptionModule,
     CouponModule,
     ProvidersModule,
+    HttpModule.register({ timeout: 10000 }),
   ],
   controllers: [PaymentController],
   providers: [PaymentService],

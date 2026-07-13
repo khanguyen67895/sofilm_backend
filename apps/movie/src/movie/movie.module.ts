@@ -13,6 +13,7 @@ import { Episode } from '../entities/episode.entity';
 import { MovieService } from './movie.service';
 import { MovieController } from './movie.controller';
 import { VideoResolverService } from './video-resolver.service';
+import { EntitlementService } from './entitlement.service';
 
 @Module({
   imports: [
@@ -30,6 +31,6 @@ import { VideoResolverService } from './video-resolver.service';
     HttpModule.register({ timeout: 10000 }),
   ],
   controllers: [MovieController],
-  providers: [MovieService, VideoResolverService],
+  providers: [MovieService, VideoResolverService, EntitlementService],
 })
 export class MovieModule {}

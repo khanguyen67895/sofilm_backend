@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
 import { AppModule } from './app.module';
+import { ProxyController } from './proxy/proxy.controller';
 
 async function bootstrap() {
   process.env.SERVICE_NAME = 'gateway';
@@ -21,6 +22,13 @@ async function bootstrap() {
     .addBearerAuth()
     .build();
   SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+
+  // Registered as raw Express middleware, not a Nest route — see the
+  // comment on ProxyController for why `@All('*')` doesn't work here.
+  const proxy = app.get(ProxyController);
+  app.use((req: import('express').Request, res: import('express').Response) =>
+    proxy.forward(req, res),
+  );
 
   const port = process.env.GATEWAY_PORT ?? 3000;
   await app.listen(port);

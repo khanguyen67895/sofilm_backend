@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { Public, Roles } from '@app/auth';
+import { OptionalAuth, Public, Roles } from '@app/auth';
 import { PaginationQueryDto } from '@app/common';
 import { MovieService } from './movie.service';
 import { CreateMovieDto } from './dto/create-movie.dto';
@@ -82,11 +83,11 @@ export class MovieController {
     return this.movieService.byCategory(categorySlug, query);
   }
 
-  @Public()
+  @OptionalAuth()
   @Get(':slug')
   @ApiOperation({ summary: 'Full movie/series detail (seasons + episodes + cast)' })
-  findBySlug(@Param('slug') slug: string) {
-    return this.movieService.findBySlug(slug);
+  findBySlug(@Param('slug') slug: string, @Req() req: Request) {
+    return this.movieService.findBySlug(slug, req.headers.authorization);
   }
 
   @Public()

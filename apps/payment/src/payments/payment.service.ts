@@ -1,6 +1,16 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { HttpService } from '@nestjs/axios';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
+import { firstValueFrom } from 'rxjs';
 import { Repository } from 'typeorm';
+import { PaginatedResult, PaginationQueryDto, paginate } from '@app/common';
 import { Coupon } from '../entities/coupon.entity';
 import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { Payment, PaymentProviderName, PaymentStatus } from '../entities/payment.entity';
@@ -23,6 +33,8 @@ export interface RefundRequestDto {
 
 @Injectable()
 export class PaymentService {
+  private readonly logger = new Logger(PaymentService.name);
+
   constructor(
     @InjectRepository(Invoice) private readonly invoices: Repository<Invoice>,
     @InjectRepository(Payment) private readonly payments: Repository<Payment>,
@@ -32,7 +44,30 @@ export class PaymentService {
     private readonly plans: SubscriptionPlanService,
     private readonly coupons: CouponService,
     private readonly providerFactory: PaymentProviderFactory,
+    private readonly http: HttpService,
+    private readonly config: ConfigService,
   ) {}
+
+  async history(userId: string, query: PaginationQueryDto): Promise<PaginatedResult<Invoice>> {
+    const [items, total] = await this.invoices.findAndCount({
+      where: { userId },
+      relations: ['plan', 'coupon'],
+      order: { createdAt: 'DESC' },
+      skip: query.skip,
+      take: query.limit,
+    });
+    return paginate(items, total, query.page, query.limit);
+  }
+
+  async verify(userId: string, invoiceId: string): Promise<Invoice> {
+    const invoice = await this.invoices.findOne({
+      where: { id: invoiceId },
+      relations: ['plan', 'coupon'],
+    });
+    if (!invoice) throw new NotFoundException(`Invoice "${invoiceId}" not found`);
+    if (invoice.userId !== userId) throw new ForbiddenException();
+    return invoice;
+  }
 
   async checkout(
     userId: string,
@@ -149,8 +184,21 @@ export class PaymentService {
     }
     await this.userSubscriptions.save(subscription);
 
-    // TODO: call ${USER_SERVICE_URL}/users/me/subscription (or publish a "subscription.activated"
-    // event) to sync the denormalized tier in user-service once an internal service-auth story exists.
+    try {
+      const userServiceUrl =
+        this.config.get<string>('USER_SERVICE_URL') ?? 'http://localhost:3002';
+      await firstValueFrom(
+        this.http.patch(`${userServiceUrl}/users/me/subscription`, {
+          userId: invoice.userId,
+          tier: plan.tier,
+          expiresAt: expiresAt.toISOString(),
+        }),
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Failed to sync subscription tier for user "${invoice.userId}": ${(err as Error).message}`,
+      );
+    }
 
     return { success: true };
   }

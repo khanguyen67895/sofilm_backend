@@ -5,7 +5,7 @@ import { ProxyConfigService } from './proxy-config.service';
 
 @Module({
   imports: [HttpModule.register({ timeout: 15_000 })],
-  controllers: [ProxyController],
-  providers: [ProxyConfigService],
+  providers: [ProxyController, ProxyConfigService],
+  exports: [ProxyController],
 })
 export class ProxyModule {}

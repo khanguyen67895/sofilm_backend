@@ -7,6 +7,7 @@ import { AuthLibModule, JwtAuthGuard, RolesGuard } from '@app/auth';
 import { QueueModule } from '@app/queue';
 import { HttpExceptionFilter, LoggingInterceptor, TransformInterceptor } from '@app/common';
 import { VideoModule } from './video/video.module';
+import { ShortsModule } from './shorts/shorts.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { VideoModule } from './video/video.module';
     AuthLibModule,
     QueueModule.forRoot(),
     VideoModule,
+    ShortsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

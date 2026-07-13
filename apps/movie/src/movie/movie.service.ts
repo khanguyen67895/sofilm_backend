@@ -14,8 +14,10 @@ import { Director } from '../entities/director.entity';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
 import { VideoResolverService } from './video-resolver.service';
+import { EntitlementService } from './entitlement.service';
 
 type WithVideoUrl<T> = T & { videoUrl?: string };
+type WithAccess<T> = T & { hasAccess?: boolean };
 
 const TRENDING_CACHE_KEY = 'movies:trending';
 const TRENDING_CACHE_TTL = 60;
@@ -32,6 +34,7 @@ export class MovieService {
     @InjectRepository(Director) private readonly directors: Repository<Director>,
     private readonly redis: RedisService,
     private readonly videoResolver: VideoResolverService,
+    private readonly entitlement: EntitlementService,
   ) {}
 
   async create(dto: CreateMovieDto): Promise<Movie> {
@@ -62,13 +65,17 @@ export class MovieService {
     return this.movies.save(movie);
   }
 
-  async findBySlug(slug: string): Promise<Movie> {
+  async findBySlug(slug: string, authHeader?: string): Promise<Movie> {
     const movie = await this.movies.findOne({
       where: { slug },
       relations: ['seasons', 'seasons.episodes', 'actors', 'directors'],
     });
     if (!movie) throw new NotFoundException(`Movie "${slug}" not found`);
-    return this.withVideoUrls(movie);
+
+    const entitled = movie.isPremium
+      ? await this.entitlement.hasActiveSubscription(authHeader)
+      : true;
+    return this.withVideoUrls(movie, entitled);
   }
 
   async findById(id: string): Promise<Movie> {
@@ -80,8 +87,17 @@ export class MovieService {
     return this.withVideoUrls(movie);
   }
 
-  /** Response-shaping step: resolves videoId -> playable URL for a movie and all its episodes. */
-  private async withVideoUrls(movie: Movie): Promise<Movie> {
+  /**
+   * Response-shaping step: resolves videoId -> playable URL for a movie and all its
+   * episodes, unless `entitled` is false — in that case no video-service call is made
+   * at all and no videoUrl fields are set, so premium content is never sent to a
+   * caller without an active subscription. `hasAccess` is always set so the frontend
+   * can render a paywall deterministically.
+   */
+  private async withVideoUrls(movie: Movie, entitled = true): Promise<Movie> {
+    (movie as WithAccess<Movie>).hasAccess = entitled;
+    if (!entitled) return movie;
+
     const ids = new Set<string>();
     if (movie.type === MovieType.MOVIE && movie.videoId) ids.add(movie.videoId);
     for (const season of movie.seasons ?? []) {

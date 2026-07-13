@@ -28,7 +28,7 @@ export class FavoritesService {
     const response = await firstValueFrom(
       this.httpService.post(`${this.movieServiceUrl}/movies/batch`, { ids: movieIds }),
     );
-    return response.data;
+    return Array.isArray(response.data) ? response.data : (response.data?.data ?? []);
   }
 
   /** Idempotent — no-op if the movie is already favorited. */

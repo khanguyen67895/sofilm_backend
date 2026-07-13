@@ -1,25 +1,29 @@
-import { All, Controller, Req, Res } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import type { Request, Response } from 'express';
-import { Public } from '@app/auth';
 import { ProxyConfigService } from './proxy-config.service';
 
-@Controller()
+/**
+ * Registered as a raw Express middleware via `app.use()` in main.ts, NOT as
+ * a Nest `@All('*')` route — @nestjs/core 10.4.x's LegacyRouteConverter
+ * unconditionally rewrites a bare `'*'` route path to the Express-5-only
+ * `'{*path}'` syntax before handing it to the platform adapter, regardless
+ * of which Express major version is actually installed. This app runs
+ * Express 4 (path-to-regexp 0.1.13), which has no idea what `{*path}` means,
+ * so the "fixed" route silently matched nothing and every proxied request
+ * 404'd. Bypassing Nest's router entirely for this catch-all sidesteps the
+ * conversion. Every request is public *at the gateway* regardless — JWT
+ * verification happens downstream, in the target service, since that's
+ * where `@Public()`/`@Roles()` are actually declared per-route.
+ */
+@Injectable()
 export class ProxyController {
   constructor(
     private readonly http: HttpService,
     private readonly proxyConfig: ProxyConfigService,
   ) {}
 
-  /**
-   * Every request is public *at the gateway* — JWT verification happens
-   * downstream, in the target service, since that's where `@Public()`/`@Roles()`
-   * are actually declared per-route. The gateway only forwards, rate-limits,
-   * and logs.
-   */
-  @Public()
-  @All('*')
-  async forward(@Req() req: Request, @Res() res: Response) {
+  async forward(req: Request, res: Response) {
     if (req.path === '/health') {
       return res.status(200).json({ status: 'ok', service: 'gateway' });
     }

@@ -1,6 +1,7 @@
 export * from './auth-lib.module';
 export * from './interfaces/jwt-payload.interface';
 export * from './decorators/public.decorator';
+export * from './decorators/optional-auth.decorator';
 export * from './decorators/roles.decorator';
 export * from './decorators/current-user.decorator';
 export * from './guards/jwt-auth.guard';
