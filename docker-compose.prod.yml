@@ -14,35 +14,44 @@ x-app: &app
   image: ${APP_IMAGE:-sofilm-app:latest}
   build: { context: ., dockerfile: Dockerfile }
   restart: unless-stopped
-  environment:
-    NODE_ENV: production
-    DB_HOST: postgres
-    DB_USERNAME: ${POSTGRES_USER:-sofilm}
-    DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
-    REDIS_HOST: redis
-    ELASTICSEARCH_NODE: http://elasticsearch:9200
-    S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
-    S3_ACCESS_KEY: ${S3_ACCESS_KEY:-sofilm}
-    S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env.prod}
-    S3_BUCKET: ${S3_BUCKET:-sofilm-media}
-    CDN_BASE_URL: ${CDN_BASE_URL:-}
-    MAIL_HOST: ${MAIL_HOST:-mailhog}
-    MAIL_PORT: ${MAIL_PORT:-1025}
-    MAIL_FROM: ${MAIL_FROM:-SoFilm <no-reply@sofilm.dev>}
-    JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env.prod}
-    JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env.prod}
-    AUTH_SERVICE_URL: http://auth:3001
-    USER_SERVICE_URL: http://user:3002
-    MOVIE_SERVICE_URL: http://movie:3003
-    VIDEO_SERVICE_URL: http://video:3004
-    SEARCH_SERVICE_URL: http://search:3005
-    HISTORY_SERVICE_URL: http://history:3006
-    RECOMMENDATION_SERVICE_URL: http://recommendation:3007
-    PAYMENT_SERVICE_URL: http://payment:3008
-    NOTIFICATION_SERVICE_URL: http://notification:3009
   depends_on:
     postgres: { condition: service_healthy }
     redis: { condition: service_started }
+
+# Common environment shared by every app container. IMPORTANT: this must be
+# merged into each service's `environment:` block via `<<: *app-env` — a
+# service-level `environment:` key does NOT deep-merge with the one carried
+# by `<<: *app` above (YAML merge keys only merge keys absent from the local
+# mapping; `environment` is present locally in every service below, so it
+# would otherwise silently replace this entire block, wiping out DB_HOST,
+# REDIS_HOST, the JWT secrets, etc. for every service except gateway). This
+# bit us once already — see git history / CLAUDE.md if this regresses.
+x-app-env: &app-env
+  NODE_ENV: production
+  DB_HOST: postgres
+  DB_USERNAME: ${POSTGRES_USER:-sofilm}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.prod}
+  REDIS_HOST: redis
+  ELASTICSEARCH_NODE: http://elasticsearch:9200
+  S3_ENDPOINT: ${S3_ENDPOINT:-http://minio:9000}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-sofilm}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:?set S3_SECRET_KEY in .env.prod}
+  S3_BUCKET: ${S3_BUCKET:-sofilm-media}
+  CDN_BASE_URL: ${CDN_BASE_URL:-}
+  MAIL_HOST: ${MAIL_HOST:-mailhog}
+  MAIL_PORT: ${MAIL_PORT:-1025}
+  MAIL_FROM: ${MAIL_FROM:-SoFilm <no-reply@sofilm.dev>}
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?set JWT_ACCESS_SECRET in .env.prod}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?set JWT_REFRESH_SECRET in .env.prod}
+  AUTH_SERVICE_URL: http://auth:3001
+  USER_SERVICE_URL: http://user:3002
+  MOVIE_SERVICE_URL: http://movie:3003
+  VIDEO_SERVICE_URL: http://video:3004
+  SEARCH_SERVICE_URL: http://search:3005
+  HISTORY_SERVICE_URL: http://history:3006
+  RECOMMENDATION_SERVICE_URL: http://recommendation:3007
+  PAYMENT_SERVICE_URL: http://payment:3008
+  NOTIFICATION_SERVICE_URL: http://notification:3009
 
 services:
   # ── Data + search + object storage (self-hosted, persistent) ────────────────
@@ -93,6 +102,7 @@ services:
     <<: *app
     command: node dist/apps/gateway/main.js
     environment:
+      <<: *app-env
       GATEWAY_PORT: 3000
       THROTTLE_TTL: ${THROTTLE_TTL:-60}
       THROTTLE_LIMIT: ${THROTTLE_LIMIT:-100}
@@ -106,51 +116,78 @@ services:
   auth:
     <<: *app
     command: node dist/apps/auth/main.js
-    environment: { AUTH_PORT: 3001, AUTH_DB_NAME: auth_db }
+    environment:
+      <<: *app-env
+      AUTH_PORT: 3001
+      AUTH_DB_NAME: auth_db
 
   user:
     <<: *app
     command: node dist/apps/user/main.js
-    environment: { USER_PORT: 3002, USER_DB_NAME: user_db }
+    environment:
+      <<: *app-env
+      USER_PORT: 3002
+      USER_DB_NAME: user_db
 
   movie:
     <<: *app
     command: node dist/apps/movie/main.js
-    environment: { MOVIE_PORT: 3003, MOVIE_DB_NAME: movie_db }
+    environment:
+      <<: *app-env
+      MOVIE_PORT: 3003
+      MOVIE_DB_NAME: movie_db
 
   video:
     <<: *app
     command: node dist/apps/video/main.js
-    environment: { VIDEO_PORT: 3004, VIDEO_DB_NAME: video_db }
+    environment:
+      <<: *app-env
+      VIDEO_PORT: 3004
+      VIDEO_DB_NAME: video_db
 
   search:
     <<: *app
     command: node dist/apps/search/main.js
-    environment: { SEARCH_PORT: 3005 }
+    environment:
+      <<: *app-env
+      SEARCH_PORT: 3005
 
   history:
     <<: *app
     command: node dist/apps/history/main.js
-    environment: { HISTORY_PORT: 3006, HISTORY_DB_NAME: history_db }
+    environment:
+      <<: *app-env
+      HISTORY_PORT: 3006
+      HISTORY_DB_NAME: history_db
 
   recommendation:
     <<: *app
     command: node dist/apps/recommendation/main.js
-    environment: { RECOMMENDATION_PORT: 3007 }
+    environment:
+      <<: *app-env
+      RECOMMENDATION_PORT: 3007
 
   payment:
     <<: *app
     command: node dist/apps/payment/main.js
-    environment: { PAYMENT_PORT: 3008, PAYMENT_DB_NAME: payment_db }
+    environment:
+      <<: *app-env
+      PAYMENT_PORT: 3008
+      PAYMENT_DB_NAME: payment_db
 
   notification:
     <<: *app
     command: node dist/apps/notification/main.js
-    environment: { NOTIFICATION_PORT: 3009, NOTIFICATION_DB_NAME: notification_db }
+    environment:
+      <<: *app-env
+      NOTIFICATION_PORT: 3009
+      NOTIFICATION_DB_NAME: notification_db
 
   transcoder:
     <<: *app
     command: node dist/apps/transcoder/main.js
+    environment:
+      <<: *app-env
     # no ports — pure BullMQ worker, no HTTP server
 
   # ── Reverse proxy: TLS termination for the gateway only ────────────────────
