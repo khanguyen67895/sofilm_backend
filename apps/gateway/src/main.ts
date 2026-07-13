@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { WINSTON_MODULE_NEST_PROVIDER } from 'nest-winston';
+import { json, urlencoded } from 'express';
 import { AppModule } from './app.module';
 import { ProxyController } from './proxy/proxy.controller';
 
@@ -25,6 +26,15 @@ async function bootstrap() {
 
   // Registered as raw Express middleware, not a Nest route — see the
   // comment on ProxyController for why `@All('*')` doesn't work here.
+  //
+  // Nest's own body-parser is normally wired up inside app.listen() ->
+  // init(), which runs AFTER this file's synchronous app.use() calls — so a
+  // catch-all middleware added here would otherwise run before req.body is
+  // ever populated, forwarding an empty body downstream. Register JSON/
+  // urlencoded parsing ourselves, explicitly, ahead of the proxy catch-all.
+  app.use(json());
+  app.use(urlencoded({ extended: true }));
+
   const proxy = app.get(ProxyController);
   app.use((req: import('express').Request, res: import('express').Response) =>
     proxy.forward(req, res),
