@@ -185,8 +185,7 @@ export class PaymentService {
     await this.userSubscriptions.save(subscription);
 
     try {
-      const userServiceUrl =
-        this.config.get<string>('USER_SERVICE_URL') ?? 'http://localhost:3002';
+      const userServiceUrl = this.config.get<string>('USER_SERVICE_URL') ?? 'http://localhost:3002';
       await firstValueFrom(
         this.http.patch(`${userServiceUrl}/users/me/subscription`, {
           userId: invoice.userId,

@@ -12,7 +12,9 @@ export class ShortsController {
 
   @OptionalAuth()
   @Get('feed')
-  @ApiOperation({ summary: 'Paginated vertical-video feed, isLiked reflects the caller if authenticated' })
+  @ApiOperation({
+    summary: 'Paginated vertical-video feed, isLiked reflects the caller if authenticated',
+  })
   feed(@CurrentUser('sub') userId: string | undefined, @Query() query: PaginationQueryDto) {
     return this.shortsService.feed(userId, query);
   }
