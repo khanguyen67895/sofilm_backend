@@ -4,7 +4,8 @@ Creates the AWS side referenced in [`../../DEPLOY.md`](../../DEPLOY.md)'s
 "Account / host reference" table — VPC, EC2 instance, Elastic IP, security
 group, SSM role, ECR repo — with **AWS CDK (TypeScript)**. This mirrors the
 sibling `sofin` project's `infra/cdk`, adapted for SoFilm's heavier stack
-(11 NestJS apps + Elasticsearch + MinIO, vs sofin's 5 services).
+(11 NestJS apps + Elasticsearch, vs sofin's 5 services). Object storage is
+real AWS S3, same as `sofin` — provisioned/managed out-of-band, not by this stack.
 
 ```
                 Internet
@@ -15,8 +16,9 @@ sibling `sofin` project's `infra/cdk`, adapted for SoFilm's heavier stack
    gateway · auth · user · movie · video · search · history
    recommendation · payment · notification · transcoder
                    │
-     postgres · redis · elasticsearch · minio   (named volumes on EBS)
+          postgres · redis · elasticsearch   (named volumes on EBS)
                     ── all on ONE EC2 host ──
+                          + real AWS S3
 ```
 
 Unlike `sofin`'s host (which builds the image on-box on first boot), this
@@ -45,8 +47,8 @@ Useful context overrides (`-c key=value`):
 
 | Key | Default | Purpose |
 |---|---|---|
-| `instanceType` | `t3.medium` | 4 GB RAM + 6 GB swap. Elasticsearch + MinIO + 11 Node processes want real memory — bump to `t3.large` (8 GB) if you see OOM kills (`dmesg \| grep -i kill` on the host). |
-| `volumeSize` | `40` | Root EBS GB (ES index data + MinIO media + Docker images add up fast). |
+| `instanceType` | `t3.medium` | 4 GB RAM + 6 GB swap. Elasticsearch + 11 Node processes want real memory — bump to `t3.large` (8 GB) if you see OOM kills (`dmesg \| grep -i kill` on the host). |
+| `volumeSize` | `40` | Root EBS GB (ES index data + Docker images add up fast). |
 | `sshCidr` | _(none)_ | Open `:22` to this CIDR, e.g. `-c sshCidr=1.2.3.4/32`. Omit to use SSM only. |
 | `keyName` | _(none)_ | Existing EC2 key pair name (only if you set `sshCidr`). |
 | `repoUrl` | this repo on GitHub | Git repo cloned to `/opt/sofilm-backend` on boot. |
@@ -107,11 +109,12 @@ for the very first image.
 
 ## Notes & caveats
 
-- **Self-hosted data:** Postgres/Redis/Elasticsearch/MinIO run as containers
-  with named volumes on the EBS root disk — fine for staging/demo. For
-  production-grade durability, move Postgres to **RDS**, MinIO to real **S3**,
-  and Elasticsearch to **Amazon OpenSearch** (the compose env vars already
-  point at hostnames/endpoints, so it's mostly a URL swap).
+- **Self-hosted data:** Postgres/Redis/Elasticsearch run as containers with
+  named volumes on the EBS root disk — fine for staging/demo. Object storage
+  is already real S3 (see `../../DEPLOY.md`), not self-hosted. For
+  production-grade durability on the rest, move Postgres to **RDS** and
+  Elasticsearch to **Amazon OpenSearch** (the compose env vars already point
+  at hostnames/endpoints, so it's mostly a URL swap).
 - **Security:** only 80/443 are public; shell access is via SSM (no inbound
   SSH unless you set `sshCidr`). Secrets live only in `.env.prod` on the host,
   which is git-ignored.

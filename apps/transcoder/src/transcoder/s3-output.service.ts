@@ -18,9 +18,7 @@ export class S3OutputService {
   constructor(private readonly config: ConfigService) {
     this.bucket = this.config.getOrThrow<string>('s3.bucket');
     this.client = new S3Client({
-      endpoint: this.config.getOrThrow<string>('s3.endpoint'),
       region: this.config.getOrThrow<string>('s3.region'),
-      forcePathStyle: this.config.get<boolean>('s3.forcePathStyle') ?? true,
       credentials: {
         accessKeyId: this.config.getOrThrow<string>('s3.accessKeyId'),
         secretAccessKey: this.config.getOrThrow<string>('s3.secretAccessKey'),

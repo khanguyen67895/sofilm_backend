@@ -7,7 +7,8 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 /**
  * Single EC2 host that runs the whole SoFilm stack via docker-compose
  * (docker-compose.prod.yml): all 11 NestJS apps + self-hosted Postgres,
- * Redis, Elasticsearch, MinIO, and a Caddy reverse proxy.
+ * Redis, Elasticsearch, and a Caddy reverse proxy. Object storage is real
+ * AWS S3 (not self-hosted), so this host only needs an IAM role/creds for it.
  *
  * Unlike the sibling `sofin` stack, this host never builds the image itself —
  * `.github/workflows/deploy.yml` builds+pushes to ECR and the host only
@@ -16,10 +17,10 @@ import * as iam from 'aws-cdk-lib/aws-iam';
  *
  * Tunables (override with `-c key=value` on `cdk deploy`):
  *   instanceType  EC2 size            (default t3.medium — 4 GB + 6 GB swap;
- *                                      Elasticsearch + MinIO + 11 Node
- *                                      processes want real memory, bump to
- *                                      t3.large if you see OOM kills)
- *   volumeSize    root EBS GB         (default 40 — ES index + MinIO media + Docker images)
+ *                                      Elasticsearch + 11 Node processes want
+ *                                      real memory, bump to t3.large if you
+ *                                      see OOM kills)
+ *   volumeSize    root EBS GB         (default 40 — ES index + Docker images)
  *   sshCidr       CIDR allowed on :22 (default '' → no SSH; use SSM Session Manager)
  *   keyName       existing EC2 keypair name for SSH (optional)
  *   repoUrl       git repo to clone   (default this project's GitHub repo)
@@ -78,7 +79,7 @@ export class SofilmStack extends cdk.Stack {
     repo.grantPull(role);
 
     // Bootstrap: Docker + Compose v2 + git + a swapfile (protects against
-    // memory spikes from Elasticsearch/MinIO on a smaller instance), then
+    // memory spikes from Elasticsearch on a smaller instance), then
     // clone the repo to /opt/sofilm-backend. Compose is NOT auto-started: it
     // needs .env.prod with real secrets, which the operator creates after
     // connecting (see ../../DEPLOY.md).
@@ -92,7 +93,7 @@ export class SofilmStack extends cdk.Stack {
       'mkdir -p /usr/local/lib/docker/cli-plugins',
       'curl -fsSL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose',
       'chmod +x /usr/local/lib/docker/cli-plugins/docker-compose',
-      // swap compensates for RAM on smaller instances — ES + MinIO + 11 Node
+      // swap compensates for RAM on smaller instances — ES + 11 Node
       // processes can spike well above idle usage.
       'if [ ! -f /swapfile ]; then dd if=/dev/zero of=/swapfile bs=1M count=6144; chmod 600 /swapfile; mkswap /swapfile; swapon /swapfile; echo "/swapfile none swap sw 0 0" >> /etc/fstab; fi',
       `git clone ${repoUrl} /opt/sofilm-backend || true`,

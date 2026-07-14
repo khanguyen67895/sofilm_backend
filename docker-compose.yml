@@ -12,7 +12,6 @@ x-app: &app
     DB_HOST: postgres
     REDIS_HOST: redis
     ELASTICSEARCH_NODE: http://elasticsearch:9200
-    S3_ENDPOINT: http://minio:9000
     MAIL_HOST: mailhog
     AUTH_SERVICE_URL: http://auth:3001
     USER_SERVICE_URL: http://user:3002
@@ -68,24 +67,6 @@ services:
       - "9200:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
-
-  # No manual bucket setup needed: video-service's S3Service creates the
-  # "sofilm-media" bucket and sets it to public-read (+ CORS) on startup
-  # (see apps/video/src/video/s3.service.ts#onModuleInit). Console still at
-  # http://localhost:9001 (sofilm / sofilm123) if you need to inspect objects.
-  minio:
-    image: minio/minio:latest
-    container_name: sofilm-minio
-    restart: unless-stopped
-    environment:
-      MINIO_ROOT_USER: sofilm
-      MINIO_ROOT_PASSWORD: sofilm123
-    command: server /data --console-address ":9001"
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio_data:/data
 
   mailhog:
     image: mailhog/mailhog:latest
@@ -156,4 +137,3 @@ volumes:
   postgres_data:
   redis_data:
   elasticsearch_data:
-  minio_data:

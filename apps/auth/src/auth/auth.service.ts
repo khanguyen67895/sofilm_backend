@@ -75,6 +75,25 @@ export class AuthService {
     });
   }
 
+  /** Called after OtpService.verify() succeeds — auto-registers on first login, matching the "phone + OTP only, no separate signup screen" flow. */
+  async loginWithPhone(phone: string, deviceId?: string) {
+    let user = await this.users.findOne({ where: { phone }, relations: ['roles'] });
+
+    if (!user) {
+      const defaultRole = await this.getOrCreateRole('USER');
+      user = await this.users.save(
+        this.users.create({
+          phone,
+          name: phone,
+          provider: AuthProvider.LOCAL,
+          roles: [defaultRole],
+        }),
+      );
+    }
+
+    return this.issueSession(user, { deviceId });
+  }
+
   async socialLogin(provider: AuthProvider, profile: SocialProfile, deviceId?: string) {
     let user = await this.users.findOne({
       where: { email: profile.email },

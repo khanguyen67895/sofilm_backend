@@ -8,9 +8,11 @@ prints the values for the table below (`InstanceId`, `EcrUri`, `PublicIp`) as
 deploy outputs, so you don't have to hunt for them in the Console.
 
 The host runs the whole stack from [`docker-compose.prod.yml`](./docker-compose.prod.yml):
-all 11 NestJS apps + self-hosted Postgres, Redis, Elasticsearch, MinIO, and a
+all 11 NestJS apps + self-hosted Postgres, Redis, Elasticsearch, and a
 Caddy reverse proxy. One image (`sofilm-app`) is built from this repo and
 reused by every app container; compose overrides the `command:` per service.
+Object storage is real AWS S3, not self-hosted — provision the bucket and a
+scoped IAM user out-of-band before first boot (see `S3_*`/`CDN_BASE_URL` below).
 
 ---
 
@@ -133,18 +135,21 @@ Create `/opt/sofilm-backend/.env.prod`. Generate secrets:
 
 ```bash
 openssl rand -hex 24   # POSTGRES_PASSWORD
-openssl rand -hex 24   # S3_SECRET_KEY
 openssl rand -hex 32   # JWT_ACCESS_SECRET
 openssl rand -hex 32   # JWT_REFRESH_SECRET
 ```
 
+`S3_ACCESS_KEY`/`S3_SECRET_KEY` are real AWS credentials, not generated —
+create a scoped IAM user (`s3:GetObject`/`s3:PutObject`/`s3:PutBucketCors` on
+just the one bucket) and use its access key pair.
+
 ```bash
 POSTGRES_USER=sofilm
 POSTGRES_PASSWORD=<hex>
-S3_ACCESS_KEY=sofilm
-S3_SECRET_KEY=<hex>
+S3_ACCESS_KEY=<IAM access key id>
+S3_SECRET_KEY=<IAM secret access key>
 S3_BUCKET=sofilm-media
-CDN_BASE_URL=https://media.example.com   # or your MinIO/CDN public URL
+CDN_BASE_URL=https://media.example.com   # your S3/CloudFront public URL
 JWT_ACCESS_SECRET=<hex>
 JWT_REFRESH_SECRET=<hex>
 
@@ -231,5 +236,5 @@ $C config | grep image:     # what image each service resolves to
 - **No migrations** — see gotcha #4. Add TypeORM migrations before this holds
   real user data.
 - **Resource headroom** — 11 app containers + Postgres + Redis + Elasticsearch
-  + MinIO + Caddy on one box needs real memory (Elasticsearch alone wants
-  ~1-2 GB); size the instance accordingly and watch for OOM.
+  + Caddy on one box needs real memory (Elasticsearch alone wants ~1-2 GB);
+  size the instance accordingly and watch for OOM.

@@ -11,7 +11,7 @@ single Nest CLI monorepo (`apps/` + `libs/`, no Nx/Turborepo needed).
 - **Redis + ioredis** — cache, OTP storage, per-user recommendation cache
 - **BullMQ** (`@nestjs/bullmq`) — async pipelines: video transcoding, notification delivery
 - **Elasticsearch** — search-service's document store (movies indexed by title/actors/genres/tags/directors)
-- **S3-compatible object storage** (MinIO in dev) via `@aws-sdk/client-s3` + presigned URLs — video-service never proxies file bytes itself
+- **Object storage: real AWS S3** via `@aws-sdk/client-s3` + presigned URLs — video-service never proxies file bytes itself; bucket + IAM user are provisioned out-of-band (no local MinIO)
 - **JWT** (access + refresh, separate secrets/expiry) — `libs/auth` provides shared *verification*; `apps/auth` is the only service that *issues* tokens
 - **Swagger** on every service at `/docs` (gateway's own `/docs` documents the proxy; each service's own `/docs` is the authoritative source for its request/response shapes)
 
@@ -96,7 +96,7 @@ truth for this table — adding a service is one new entry there plus a
 ```bash
 cp .env.example .env
 npm install
-npm run infra:up               # postgres, redis, elasticsearch, minio, mailhog (docker compose up -d)
+npm run infra:up               # postgres, redis, elasticsearch, mailhog (docker compose up -d)
 npm run start:gateway          # and start:auth / start:movie / start:user / ... per service
 ```
 
@@ -118,8 +118,8 @@ pnpm/Nx/Prisma:
 
 - **`Dockerfile`** — one image for the whole monorepo (multi-stage: `npm ci` + `npm run build:all`, which runs `nest build <app>` — webpack-bundled, see below — for all 11 apps; the runtime stage just copies `node_modules` + `dist` + `package.json`). `docker-compose.yml`/`docker-compose.prod.yml` reuse this single image per service, overriding only `command:`.
 - **`nest-cli.json` sets `"webpack": true`** — this matters: without it, `nest build` uses raw `tsc`, and because every app's source cross-references `libs/*` via TS path aliases, `tsc` computes each app's `outDir` relative to the *workspace* root instead of the app's own `src/`, producing a nested `dist/apps/<name>/apps/<name>/src/main.js` instead of the clean `dist/apps/<name>/main.js` the Dockerfile/compose `command:`s expect. If a fresh `nest build` ever produces that nested path again, check this flag first.
-- **`docker-compose.yml`** — local dev infra (`postgres`/`redis`/`elasticsearch`/`minio`/`mailhog`) always on; add `--profile apps` to also run all 11 services from the local image.
-- **`docker-compose.prod.yml`** + **`Caddyfile`** — single-host production stack (self-hosted Postgres/Redis/ES/MinIO + all 11 apps + Caddy terminating TLS in front of the gateway only). See **[`DEPLOY.md`](./DEPLOY.md)** for the full runbook (secrets, first-time host setup, troubleshooting) — it's the sofilm-backend equivalent of `sofin/infra/DEPLOY.md`.
+- **`docker-compose.yml`** — local dev infra (`postgres`/`redis`/`elasticsearch`/`mailhog`) always on; add `--profile apps` to also run all 11 services from the local image. Object storage is real AWS S3, not part of this compose file.
+- **`docker-compose.prod.yml`** + **`Caddyfile`** — single-host production stack (self-hosted Postgres/Redis/ES + all 11 apps + Caddy terminating TLS in front of the gateway only). See **[`DEPLOY.md`](./DEPLOY.md)** for the full runbook (secrets, first-time host setup, troubleshooting) — it's the sofilm-backend equivalent of `sofin/infra/DEPLOY.md`.
 - **`.github/workflows/deploy.yml`** — three jobs: `test` (lint + typecheck + `build:all`, every push/PR) → `build` (Docker Buildx → push to ECR, `main`/manual only) → `deploy` (roll the EC2 host forward via `aws ssm send-command`, `main`/manual only). Needs 5 repo secrets: `AWS_REGION`, `ECR_REPOSITORY`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `EC2_INSTANCE_ID`.
 - This repo has no AWS account/EC2 host/ECR repo wired up yet (also no `git init`/GitHub remote) — the pipeline is ready to go the moment those exist and the 5 secrets are set; until then `test` still runs and gates PRs on lint+typecheck+build.
 
@@ -143,4 +143,4 @@ marked, swap-in point, not a hidden shortcut:
 
 - `npx tsc` / `npx nest build <every app and lib>` — **all 11 apps + 7 libs compile cleanly, zero TypeScript errors.**
 - Runtime: `gateway` was booted standalone and confirmed to fully wire up (`ConfigModule`→`LoggerModule`→`AuthLibModule`→`ThrottlerModule`→`ProxyModule`) and serve `/docs` with HTTP 200. `auth` and `movie` were booted and confirmed to reach `TypeOrmModule`'s connection-retry logic and get a real Postgres protocol-level response (rejected only on credentials, against a pre-existing local Postgres unrelated to this project — proving the DI graph and DB config wiring are correct end-to-end).
-- **Not verified this session**: a full docker-compose-backed run with the project's own Postgres/Redis/Elasticsearch/MinIO (Docker Desktop's engine would not start in this environment), and runtime boot of the other 8 services. Re-run the steps under "Running locally" once Docker is available to close that gap — the build passing on every service is a strong signal, but it isn't the same as having actually inserted a row and served a live request end-to-end for anything beyond gateway/auth/movie.
+- **Not verified this session**: a full docker-compose-backed run with the project's own Postgres/Redis/Elasticsearch (Docker Desktop's engine would not start in this environment), and runtime boot of the other 8 services. Re-run the steps under "Running locally" once Docker is available to close that gap — the build passing on every service is a strong signal, but it isn't the same as having actually inserted a row and served a live request end-to-end for anything beyond gateway/auth/movie.

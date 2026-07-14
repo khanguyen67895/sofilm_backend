@@ -13,8 +13,11 @@ export enum AuthProvider {
 
 @Entity('users')
 export class User extends BaseEntity {
-  @Column({ unique: true })
-  email: string;
+  @Column({ unique: true, nullable: true })
+  email?: string;
+
+  @Column({ unique: true, nullable: true })
+  phone?: string;
 
   @Column({ nullable: true, select: false })
   passwordHash?: string;

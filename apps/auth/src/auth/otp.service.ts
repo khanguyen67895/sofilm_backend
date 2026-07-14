@@ -11,24 +11,25 @@ export class OtpService {
     private readonly config: ConfigService,
   ) {}
 
-  private key(email: string): string {
-    return `otp:${email}`;
+  private key(identifier: string): string {
+    return `otp:${identifier}`;
   }
 
-  async generate(email: string): Promise<string> {
+  /** `identifier` is whatever channel the OTP is delivered to — an email address or a phone number. */
+  async generate(identifier: string): Promise<string> {
     const length = this.config.get<number>('OTP_LENGTH') ?? 6;
     const ttl = this.config.get<number>('OTP_TTL_SECONDS') ?? 300;
     const code = Array.from({ length }, () => Math.floor(Math.random() * 10)).join('');
-    await this.redis.set(this.key(email), code, ttl);
+    await this.redis.set(this.key(identifier), code, ttl);
     // TODO: publish to notification-service (email/SMS channel) instead of logging.
-    this.logger.log(`OTP for ${email}: ${code} (dev-only log — never do this in production)`);
+    this.logger.log(`OTP for ${identifier}: ${code} (dev-only log — never do this in production)`);
     return code;
   }
 
-  async verify(email: string, code: string): Promise<boolean> {
-    const stored = await this.redis.get(this.key(email));
+  async verify(identifier: string, code: string): Promise<boolean> {
+    const stored = await this.redis.get(this.key(identifier));
     if (!stored || stored !== code) return false;
-    await this.redis.del(this.key(email));
+    await this.redis.del(this.key(identifier));
     return true;
   }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UnauthorizedException } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public } from '@app/auth';
 import type { JwtPayload } from '@app/auth';
@@ -9,7 +9,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { SocialLoginDto } from './dto/social-login.dto';
-import { RequestOtpDto, VerifyOtpDto } from './dto/otp.dto';
+import { RequestOtpDto, VerifyOtpDto, RequestPhoneOtpDto, VerifyPhoneOtpDto } from './dto/otp.dto';
 import { AuthProvider } from '../entities/user.entity';
 
 @ApiTags('auth')
@@ -87,6 +87,25 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify a one-time password' })
   verifyOtp(@Body() dto: VerifyOtpDto) {
     return this.otpService.verify(dto.email, dto.code);
+  }
+
+  @Public()
+  @Post('otp/phone/request')
+  @ApiOperation({ summary: 'Send an OTP to a phone number for the passwordless login flow' })
+  async requestPhoneOtp(@Body() dto: RequestPhoneOtpDto) {
+    await this.otpService.generate(dto.phone);
+    return { message: 'OTP sent' };
+  }
+
+  @Public()
+  @Post('otp/phone/verify')
+  @ApiOperation({
+    summary: 'Verify a phone OTP and log in — auto-registers the account on first verify',
+  })
+  async verifyPhoneOtp(@Body() dto: VerifyPhoneOtpDto) {
+    const valid = await this.otpService.verify(dto.phone, dto.code);
+    if (!valid) throw new UnauthorizedException('Invalid or expired code');
+    return this.authService.loginWithPhone(dto.phone, dto.deviceId);
   }
 
   @ApiBearerAuth()

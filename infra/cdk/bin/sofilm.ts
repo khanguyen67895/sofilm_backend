@@ -12,5 +12,5 @@ new SofilmStack(app, 'SofilmStack', {
     region: process.env.CDK_DEFAULT_REGION,
   },
   description:
-    'Single EC2 host running the SoFilm docker-compose stack (11 NestJS apps, Postgres, Redis, Elasticsearch, MinIO, Caddy).',
+    'Single EC2 host running the SoFilm docker-compose stack (11 NestJS apps, Postgres, Redis, Elasticsearch, Caddy).',
 });
