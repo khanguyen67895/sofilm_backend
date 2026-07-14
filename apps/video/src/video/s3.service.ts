@@ -100,7 +100,9 @@ export class S3Service implements OnModuleInit {
         }),
       );
     } catch (error) {
-      this.logger.warn(`Could not set CORS on bucket "${this.bucket}": ${(error as Error).message}`);
+      this.logger.warn(
+        `Could not set CORS on bucket "${this.bucket}": ${(error as Error).message}`,
+      );
     }
   }
 

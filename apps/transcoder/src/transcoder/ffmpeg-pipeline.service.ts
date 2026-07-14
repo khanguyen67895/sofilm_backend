@@ -139,7 +139,11 @@ export class FfmpegPipelineService {
       this.logger.warn(
         `ffmpeg thumbnail generation unavailable, uploading placeholder instead (${(error as Error).message})`,
       );
-      await this.s3.putObject(key, Buffer.from(PLACEHOLDER_THUMBNAIL_JPEG_BASE64, 'base64'), 'image/jpeg');
+      await this.s3.putObject(
+        key,
+        Buffer.from(PLACEHOLDER_THUMBNAIL_JPEG_BASE64, 'base64'),
+        'image/jpeg',
+      );
     }
 
     await this.delay(200);
