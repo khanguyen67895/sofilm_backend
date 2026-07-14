@@ -69,14 +69,10 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
 
-  # One-time manual setup after `docker compose up -d` (no bucket-init step runs automatically):
-  #   1. Open http://localhost:9001, log in with sofilm / sofilm123
-  #   2. Create a bucket named "sofilm-media" (must match S3_BUCKET in .env)
-  #   3. Set its Access Policy to "public" (read) so CDN_BASE_URL-constructed URLs are servable
-  # Equivalent via the mc CLI:
-  #   mc alias set local http://localhost:9000 sofilm sofilm123
-  #   mc mb local/sofilm-media
-  #   mc anonymous set download local/sofilm-media
+  # No manual bucket setup needed: video-service's S3Service creates the
+  # "sofilm-media" bucket and sets it to public-read (+ CORS) on startup
+  # (see apps/video/src/video/s3.service.ts#onModuleInit). Console still at
+  # http://localhost:9001 (sofilm / sofilm123) if you need to inspect objects.
   minio:
     image: minio/minio:latest
     container_name: sofilm-minio

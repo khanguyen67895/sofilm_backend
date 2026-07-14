@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { promises as fs } from 'fs';
 import ffmpeg from 'fluent-ffmpeg';
+import { S3OutputService } from './s3-output.service';
 
 export interface HlsQualityVariant {
   quality: string;
@@ -29,17 +31,30 @@ const QUALITY_BITRATES_KBPS: Record<string, number> = {
   '4K': 16000,
 };
 
+// 1x1 black pixel JPEG — stand-in for a real thumbnail when ffmpeg can't produce one.
+const PLACEHOLDER_THUMBNAIL_JPEG_BASE64 =
+  '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACP/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==';
+const PLACEHOLDER_SUBTITLE_VTT = 'WEBVTT\n';
+
 /**
  * Scaffold pipeline that simulates the transcoding workflow end-to-end with
  * clear log lines and short delays standing in for real ffmpeg work. This is
  * NOT a real transcoder — there is no guarantee an ffmpeg binary or the real
- * source media is available in this environment.
+ * source media is available in this environment. To avoid handing back links
+ * that 404 (nothing was ever written to those keys), every URL returned here
+ * is backed by a real S3 object: the master playlist and quality variants are
+ * the raw uploaded file copied to those keys (still real, playable video,
+ * just not actually repackaged into HLS), and the thumbnail/subtitle are
+ * either a real ffmpeg-generated file or an explicit placeholder object.
  */
 @Injectable()
 export class FfmpegPipelineService {
   private readonly logger = new Logger(FfmpegPipelineService.name);
 
-  constructor(private readonly config: ConfigService) {}
+  constructor(
+    private readonly config: ConfigService,
+    private readonly s3: S3OutputService,
+  ) {}
 
   async run(videoId: string, originalKey: string): Promise<TranscodeResult> {
     const cdnBaseUrl =
@@ -52,18 +67,27 @@ export class FfmpegPipelineService {
 
     this.logger.log('generating HLS variants: 480p, 720p, 1080p, 4K');
     await this.delay(500);
-    const qualities: HlsQualityVariant[] = ['480p', '720p', '1080p', '4K'].map((quality) => ({
-      quality,
-      hlsPlaylistUrl: `${cdnBaseUrl}/hls/${videoId}/${quality}/index.m3u8`,
-      bitrateKbps: QUALITY_BITRATES_KBPS[quality],
-    }));
+    const qualities: HlsQualityVariant[] = [];
+    for (const quality of ['480p', '720p', '1080p', '4K']) {
+      const key = `hls/${videoId}/${quality}/index.m3u8`;
+      // Not caught: if this fails, the job should fail and be reported as
+      // FAILED rather than silently claiming READY with a dead link.
+      await this.s3.copyFromSource(originalKey, key);
+      qualities.push({
+        quality,
+        hlsPlaylistUrl: `${cdnBaseUrl}/${key}`,
+        bitrateKbps: QUALITY_BITRATES_KBPS[quality],
+      });
+    }
 
     this.logger.log('generating subtitle track (placeholder)');
     await this.delay(150);
+    const subtitleKey = `subs/${videoId}/en.vtt`;
+    await this.s3.putObject(subtitleKey, PLACEHOLDER_SUBTITLE_VTT, 'text/vtt');
     const subtitles: SubtitleTrack[] = [
       {
         language: 'en',
-        url: `${cdnBaseUrl}/subs/${videoId}/en.vtt`,
+        url: `${cdnBaseUrl}/${subtitleKey}`,
         isDefault: true,
       },
     ];
@@ -71,9 +95,12 @@ export class FfmpegPipelineService {
     this.logger.log('uploading outputs to S3 / CDN ready');
     await this.delay(200);
 
+    const masterKey = `hls/${videoId}/master.m3u8`;
+    await this.s3.copyFromSource(originalKey, masterKey);
+
     return {
       thumbnailUrl,
-      hlsMasterPlaylistUrl: `${cdnBaseUrl}/hls/${videoId}/master.m3u8`,
+      hlsMasterPlaylistUrl: `${cdnBaseUrl}/${masterKey}`,
       duration: 0,
       qualities,
       subtitles,
@@ -86,11 +113,12 @@ export class FfmpegPipelineService {
     cdnBaseUrl: string,
   ): Promise<string> {
     this.logger.log('generating thumbnail');
-    const stubUrl = `${cdnBaseUrl}/thumbnails/${videoId}.jpg`;
+    const key = `thumbnails/${videoId}.jpg`;
+    const localPath = `/tmp/${videoId}.jpg`;
 
     // Real fluent-ffmpeg usage requires an ffmpeg binary on PATH and a real,
     // locally-accessible input file — neither is guaranteed in this scaffold
-    // environment, so any failure here falls back to the stub URL above
+    // environment, so any failure here falls back to a placeholder object
     // instead of failing the whole job.
     try {
       await new Promise<void>((resolve, reject) => {
@@ -104,14 +132,18 @@ export class FfmpegPipelineService {
             timestamps: ['1'],
           });
       });
+      const generated = await fs.readFile(localPath);
+      await this.s3.putObject(key, generated, 'image/jpeg');
+      await fs.unlink(localPath).catch(() => undefined);
     } catch (error) {
       this.logger.warn(
-        `ffmpeg thumbnail generation unavailable, falling back to stub (${(error as Error).message})`,
+        `ffmpeg thumbnail generation unavailable, uploading placeholder instead (${(error as Error).message})`,
       );
+      await this.s3.putObject(key, Buffer.from(PLACEHOLDER_THUMBNAIL_JPEG_BASE64, 'base64'), 'image/jpeg');
     }
 
     await this.delay(200);
-    return stubUrl;
+    return `${cdnBaseUrl}/${key}`;
   }
 
   private delay(ms: number): Promise<void> {
