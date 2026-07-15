@@ -7,6 +7,7 @@ import { Tag } from '../entities/tag.entity';
 import { Actor } from '../entities/actor.entity';
 import { Director } from '../entities/director.entity';
 import { Banner } from '../entities/banner.entity';
+import { Movie } from '../entities/movie.entity';
 import {
   ActorController,
   BannerController,
@@ -27,7 +28,9 @@ import {
 } from './catalog.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Genre, Category, Country, Tag, Actor, Director, Banner])],
+  imports: [
+    TypeOrmModule.forFeature([Genre, Category, Country, Tag, Actor, Director, Banner, Movie]),
+  ],
   controllers: [
     GenreController,
     CategoryController,

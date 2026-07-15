@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public, Roles } from '@app/auth';
 import {
   ActorService,
@@ -10,6 +10,7 @@ import {
   GenreService,
   TagService,
 } from './catalog.service';
+import { CreateBannerDto, UpdateBannerDto } from './dto/banner.dto';
 
 @ApiTags('genres')
 @Controller('genres')
@@ -144,13 +145,33 @@ export class BannerController {
 
   @Public()
   @Get()
+  @ApiOperation({ summary: 'Active banners for the homepage hero, in display order' })
   findActive() {
     return this.banners.findActive();
   }
 
   @Roles('ADMIN')
+  @Get('admin/list')
+  @ApiOperation({ summary: 'Every banner (active or not) for the admin hero manager' })
+  findAllOrdered() {
+    return this.banners.findAllOrdered();
+  }
+
+  @Roles('ADMIN')
   @Post()
-  create(@Body() body: Partial<{ imageUrl: string; title: string; order: number }>) {
-    return this.banners.create(body);
+  create(@Body() body: CreateBannerDto) {
+    return this.banners.createBanner(body);
+  }
+
+  @Roles('ADMIN')
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() body: UpdateBannerDto) {
+    return this.banners.updateBanner(id, body);
+  }
+
+  @Roles('ADMIN')
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.banners.remove(id);
   }
 }

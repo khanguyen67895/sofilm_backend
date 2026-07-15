@@ -9,6 +9,8 @@ import { Tag } from '../entities/tag.entity';
 import { Actor } from '../entities/actor.entity';
 import { Director } from '../entities/director.entity';
 import { Banner } from '../entities/banner.entity';
+import { Movie } from '../entities/movie.entity';
+import type { CreateBannerDto, UpdateBannerDto } from './dto/banner.dto';
 
 @Injectable()
 export class GenreService extends CrudService<Genre> {
@@ -54,7 +56,10 @@ export class DirectorService extends CrudService<Director> {
 
 @Injectable()
 export class BannerService extends CrudService<Banner> {
-  constructor(@InjectRepository(Banner) repo: Repository<Banner>) {
+  constructor(
+    @InjectRepository(Banner) repo: Repository<Banner>,
+    @InjectRepository(Movie) private readonly movies: Repository<Movie>,
+  ) {
     super(repo);
   }
 
@@ -65,5 +70,27 @@ export class BannerService extends CrudService<Banner> {
       order: { order: 'ASC' },
     });
     return banners.filter((b) => (!b.startAt || b.startAt <= now) && (!b.endAt || b.endAt >= now));
+  }
+
+  /** Admin listing — every banner regardless of isActive/date window, ordered for display/reordering. */
+  async findAllOrdered(): Promise<Banner[]> {
+    return this.repository.find({ order: { order: 'ASC' } });
+  }
+
+  async createBanner(dto: CreateBannerDto): Promise<Banner> {
+    const { movieId, ...rest } = dto;
+    const banner = this.repository.create(rest);
+    if (movieId) banner.movie = await this.movies.findOneByOrFail({ id: movieId });
+    return this.repository.save(banner);
+  }
+
+  async updateBanner(id: string, dto: UpdateBannerDto): Promise<Banner> {
+    const banner = await this.findById(id);
+    const { movieId, ...rest } = dto;
+    Object.assign(banner, rest);
+    if (movieId !== undefined) {
+      banner.movie = movieId ? await this.movies.findOneByOrFail({ id: movieId }) : undefined;
+    }
+    return this.repository.save(banner);
   }
 }
