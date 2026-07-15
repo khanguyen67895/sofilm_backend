@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, Public } from '@app/auth';
 import { ProfileService } from './profile.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UpdateAvatarDto } from './dto/update-avatar.dto';
 import { UpdateSubscriptionDto } from './dto/update-subscription.dto';
+import { BatchUsersDto } from './dto/batch-users.dto';
 
 @ApiTags('users')
 @Controller('users')
@@ -16,6 +17,13 @@ export class ProfileController {
   @ApiOperation({ summary: 'Get (find-or-create) the current user profile' })
   me(@CurrentUser('sub') userId: string) {
     return this.profileService.findOrCreate(userId);
+  }
+
+  @Public()
+  @Post('batch')
+  @ApiOperation({ summary: 'Hydrate a list of user ids to display name/avatar (used by review-service, etc.)' })
+  batch(@Body() dto: BatchUsersDto) {
+    return this.profileService.batchByUserIds(dto.ids);
   }
 
   @ApiBearerAuth()

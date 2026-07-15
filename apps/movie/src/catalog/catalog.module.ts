@@ -8,6 +8,7 @@ import { Actor } from '../entities/actor.entity';
 import { Director } from '../entities/director.entity';
 import { Banner } from '../entities/banner.entity';
 import { Movie } from '../entities/movie.entity';
+import { MovieModule } from '../movie/movie.module';
 import {
   ActorController,
   BannerController,
@@ -30,6 +31,7 @@ import {
 @Module({
   imports: [
     TypeOrmModule.forFeature([Genre, Category, Country, Tag, Actor, Director, Banner, Movie]),
+    MovieModule,
   ],
   controllers: [
     GenreController,

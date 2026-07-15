@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { SubscriptionTier } from '@app/common';
 import { Profile } from '../entities/profile.entity';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -43,5 +43,15 @@ export class ProfileService {
     profile.subscriptionTier = dto.tier;
     profile.subscriptionExpiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
     return this.profiles.save(profile);
+  }
+
+  /** Hydrates a list of user ids to display info (name/avatar) — used by review-service etc.
+   * Users with no profile row yet are simply omitted rather than auto-created. */
+  async batchByUserIds(
+    ids: string[],
+  ): Promise<Array<{ userId: string; displayName: string; avatar?: string }>> {
+    if (!ids?.length) return [];
+    const profiles = await this.profiles.find({ where: { userId: In([...new Set(ids)]) } });
+    return profiles.map((p) => ({ userId: p.userId, displayName: p.displayName, avatar: p.avatar }));
   }
 }

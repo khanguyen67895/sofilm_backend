@@ -9,6 +9,7 @@ import { HttpExceptionFilter, LoggingInterceptor, TransformInterceptor } from '@
 import { MovieModule } from './movie/movie.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { SeasonEpisodeModule } from './season-episode/season-episode.module';
+import { ReviewModule } from './review/review.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SeasonEpisodeModule } from './season-episode/season-episode.module';
     MovieModule,
     CatalogModule,
     SeasonEpisodeModule,
+    ReviewModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

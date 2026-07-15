@@ -32,5 +32,6 @@ import { EntitlementService } from './entitlement.service';
   ],
   controllers: [MovieController],
   providers: [MovieService, VideoResolverService, EntitlementService],
+  exports: [VideoResolverService],
 })
 export class MovieModule {}
