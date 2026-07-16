@@ -19,6 +19,13 @@ export class ShortsController {
     return this.shortsService.feed(userId, query);
   }
 
+  @Roles('ADMIN')
+  @Get('admin/list')
+  @ApiOperation({ summary: 'Paginated admin listing of all shorts (active or not)' })
+  adminList(@Query() query: PaginationQueryDto) {
+    return this.shortsService.adminList(query);
+  }
+
   @Post(':id/like')
   @ApiOperation({ summary: 'Like a short (idempotent)' })
   like(@CurrentUser('sub') userId: string, @Param('id') id: string) {
@@ -36,5 +43,12 @@ export class ShortsController {
   @ApiOperation({ summary: 'Create a short from an already-uploaded video' })
   create(@Body() dto: CreateShortDto) {
     return this.shortsService.create(dto);
+  }
+
+  @Roles('ADMIN')
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a short' })
+  remove(@Param('id') id: string) {
+    return this.shortsService.remove(id);
   }
 }

@@ -37,8 +37,15 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.users.findOne({ where: { email: dto.email } });
-    if (existing) throw new ConflictException('Email already registered');
+    const existing = await this.users.findOne({
+      where: [{ email: dto.email }, { username: dto.username }, { phone: dto.phone }],
+    });
+    if (existing) {
+      if (existing.email === dto.email) throw new ConflictException('Email already registered');
+      if (existing.username === dto.username)
+        throw new ConflictException('Username already taken');
+      throw new ConflictException('Phone number already registered');
+    }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const defaultRole = await this.getOrCreateRole('USER');
@@ -46,7 +53,9 @@ export class AuthService {
     const user = await this.users.save(
       this.users.create({
         email: dto.email,
-        name: dto.name,
+        username: dto.username,
+        phone: dto.phone,
+        name: dto.name?.trim() || dto.username,
         passwordHash,
         provider: AuthProvider.LOCAL,
         roles: [defaultRole],
@@ -58,8 +67,8 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.users.findOne({
-      where: { email: dto.email },
-      select: ['id', 'email', 'name', 'passwordHash', 'isActive'],
+      where: [{ email: dto.email }, { username: dto.email }],
+      select: ['id', 'email', 'username', 'name', 'passwordHash', 'isActive'],
       relations: ['roles'],
     });
     if (!user?.passwordHash || !user.isActive)

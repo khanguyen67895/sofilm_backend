@@ -6,6 +6,7 @@ import { Short } from '../entities/short.entity';
 import { ShortLike } from '../entities/short-like.entity';
 import { Video } from '../entities/video.entity';
 import { CreateShortDto } from './dto/create-short.dto';
+import { NotificationBroadcastService } from './notification-broadcast.service';
 
 export interface ShortDto {
   id: string;
@@ -18,12 +19,25 @@ export interface ShortDto {
   isLiked: boolean;
 }
 
+export interface ShortAdminDto {
+  id: string;
+  title: string;
+  videoUrl: string;
+  thumbnail: string;
+  movieSlug: string;
+  likes: number;
+  comments: number;
+  isActive: boolean;
+  createdAt: Date;
+}
+
 @Injectable()
 export class ShortsService {
   constructor(
     @InjectRepository(Short) private readonly shorts: Repository<Short>,
     @InjectRepository(ShortLike) private readonly shortLikes: Repository<ShortLike>,
     @InjectRepository(Video) private readonly videos: Repository<Video>,
+    private readonly notificationBroadcast: NotificationBroadcastService,
   ) {}
 
   async feed(
@@ -85,12 +99,50 @@ export class ShortsService {
     const video = await this.videos.findOneBy({ id: dto.videoId });
     if (!video) throw new NotFoundException(`Video "${dto.videoId}" not found`);
 
-    return this.shorts.save(
+    const saved = await this.shorts.save(
       this.shorts.create({
         title: dto.title,
         video,
         movieSlug: dto.movieSlug,
       }),
     );
+
+    await this.notificationBroadcast.notifyNewContent(
+      `Video ngắn mới: ${saved.title}`,
+      'Video ngắn mới vừa được thêm vào SoFilm.',
+      { thumbnail: video.thumbnailUrl, link: `/shorts` },
+    );
+
+    return saved;
+  }
+
+  /** Admin listing — every short regardless of isActive, newest first. */
+  async adminList(query: PaginationQueryDto): Promise<PaginatedResult<ShortAdminDto>> {
+    const [items, total] = await this.shorts.findAndCount({
+      relations: ['video'],
+      order: { createdAt: 'DESC' },
+      skip: query.skip,
+      take: query.limit,
+    });
+
+    const hydrated: ShortAdminDto[] = items.map((s) => ({
+      id: s.id,
+      title: s.title,
+      videoUrl: s.video?.hlsMasterPlaylistUrl ?? '',
+      thumbnail: s.video?.thumbnailUrl ?? '',
+      movieSlug: s.movieSlug,
+      likes: s.likesCount,
+      comments: s.commentsCount,
+      isActive: s.isActive,
+      createdAt: s.createdAt,
+    }));
+
+    return paginate(hydrated, total, query.page, query.limit);
+  }
+
+  async remove(id: string): Promise<void> {
+    const short = await this.shorts.findOneBy({ id });
+    if (!short) throw new NotFoundException(`Short "${id}" not found`);
+    await this.shorts.softRemove(short);
   }
 }

@@ -24,6 +24,8 @@
     "start:notification": "nest start notification --watch",
     "start:transcoder": "nest start transcoder --watch",
     "promote-admin": "ts-node -r tsconfig-paths/register apps/auth/src/scripts/promote-admin.script.ts",
+    "seed:genres": "ts-node -r tsconfig-paths/register apps/movie/src/scripts/seed-genres.script.ts",
+    "seed:plans": "ts-node -r tsconfig-paths/register apps/payment/src/scripts/seed-plans.script.ts",
     "test": "jest"
   },
   "dependencies": {

@@ -65,9 +65,10 @@ export class BannerService extends CrudService<Banner> {
     super(repo);
   }
 
-  /** Active banners for the public hero — also resolves each linked movie's
-   * videoId to a playable URL, same as MovieService.withVideoUrls, so the
-   * homepage hero can autoplay the movie's own uploaded video as its background. */
+  /** Active banners for the public hero — resolves a playable video URL, same
+   * as MovieService.withVideoUrls, so the hero can autoplay a clip as its
+   * background. The banner's own uploaded video (videoId) takes priority over
+   * the linked movie's video, letting admins pick a dedicated hero clip. */
   async findActive(): Promise<Banner[]> {
     const now = new Date();
     const banners = await this.repository.find({
@@ -79,16 +80,16 @@ export class BannerService extends CrudService<Banner> {
     );
 
     const videoIds = windowed
-      .map((b) => b.movie?.videoId)
+      .map((b) => b.videoId ?? b.movie?.videoId)
       .filter((id): id is string => Boolean(id));
 
     if (videoIds.length) {
-      const urls = await this.videoResolver.resolveMany(videoIds);
+      const resolved = await this.videoResolver.resolveMany(videoIds);
       for (const banner of windowed) {
-        if (banner.movie?.videoId) {
-          (banner.movie as Movie & { videoUrl?: string }).videoUrl = urls.get(
-            banner.movie.videoId,
-          );
+        const sourceVideoId = banner.videoId ?? banner.movie?.videoId;
+        if (sourceVideoId) {
+          (banner as Banner & { videoUrl?: string }).videoUrl =
+            resolved.get(sourceVideoId)?.videoUrl;
         }
       }
     }

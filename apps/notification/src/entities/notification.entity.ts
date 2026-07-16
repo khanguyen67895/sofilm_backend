@@ -10,9 +10,11 @@ export enum NotificationType {
 
 @Entity('notifications')
 export class Notification extends BaseEntity {
+  /** Null = broadcast (e.g. "new movie/short published") — visible to every
+   * user, not tied to one recipient. Set = a genuine personal notification. */
   @Index()
-  @Column({ name: 'user_id' })
-  userId: string;
+  @Column({ name: 'user_id', nullable: true })
+  userId?: string;
 
   @Column({ type: 'enum', enum: NotificationType })
   type: NotificationType;

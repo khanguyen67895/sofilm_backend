@@ -1,9 +1,10 @@
 import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CurrentUser, Roles } from '@app/auth';
+import { CurrentUser, Public, Roles } from '@app/auth';
 import { PaginationQueryDto } from '@app/common';
 import { NotificationService } from './notification.service';
 import { SendNotificationDto } from './dto/send-notification.dto';
+import { BroadcastNotificationDto } from './dto/broadcast-notification.dto';
 
 @ApiTags('notifications')
 @ApiBearerAuth()
@@ -18,6 +19,17 @@ export class NotificationController {
   @ApiOperation({ summary: 'Trigger a notification (email/push/sms/in-app) for a user' })
   send(@Body() dto: SendNotificationDto) {
     return this.notificationService.send(dto);
+  }
+
+  // TODO: same caveat as `send` above — internal service-to-service auth, not
+  // real public access, is the right fix once that mechanism exists.
+  @Public()
+  @Post('broadcast')
+  @ApiOperation({
+    summary: 'INTERNAL — announce new content (movie/short) to every user at once',
+  })
+  broadcast(@Body() dto: BroadcastNotificationDto) {
+    return this.notificationService.broadcast(dto.title, dto.body, dto.metadata);
   }
 
   @Get()

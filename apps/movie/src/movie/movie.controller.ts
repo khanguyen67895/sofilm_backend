@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { OptionalAuth, Public, Roles } from '@app/auth';
@@ -6,7 +6,7 @@ import { PaginationQueryDto } from '@app/common';
 import { MovieService } from './movie.service';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
-import { BatchMoviesDto } from './dto/movie-query.dto';
+import { BatchMoviesDto, MovieQueryDto } from './dto/movie-query.dto';
 
 @ApiTags('movies')
 @Controller('movies')
@@ -25,6 +25,13 @@ export class MovieController {
   @ApiOperation({ summary: 'Hydrate a list of movie ids (used by history/recommendation)' })
   batch(@Body() dto: BatchMoviesDto) {
     return this.movieService.batchByIds(dto.ids);
+  }
+
+  @Public()
+  @Get()
+  @ApiOperation({ summary: 'Paginated public movie listing, optionally filtered by genre slug' })
+  list(@Query() query: MovieQueryDto) {
+    return this.movieService.list(query);
   }
 
   @Roles('ADMIN')
@@ -46,6 +53,13 @@ export class MovieController {
   @ApiOperation({ summary: 'Update a movie/series' })
   update(@Param('id') id: string, @Body() dto: UpdateMovieDto) {
     return this.movieService.update(id, dto);
+  }
+
+  @Roles('ADMIN')
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a movie/series' })
+  remove(@Param('id') id: string) {
+    return this.movieService.remove(id);
   }
 
   @Public()

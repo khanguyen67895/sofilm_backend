@@ -24,6 +24,13 @@ export class PaymentController {
     return this.payments.verify(userId, id);
   }
 
+  /** Demo-only: simulates the provider webhook confirming this payment — see
+   * PaymentService.confirmPayment's doc comment. */
+  @Post('confirm/:invoiceId')
+  confirm(@CurrentUser('sub') userId: string, @Param('invoiceId') invoiceId: string) {
+    return this.payments.confirmPayment(userId, invoiceId);
+  }
+
   @Public()
   @Post('webhook/:provider')
   webhook(

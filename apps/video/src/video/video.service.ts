@@ -70,6 +70,18 @@ export class VideoService {
     return video;
   }
 
+  /** Re-enqueues the same processing job used on initial upload — lets the
+   * admin UI retry/regenerate a thumbnail on demand (e.g. the first attempt
+   * failed, or ran before an ffmpeg binary was available). */
+  async generateThumbnail(id: string): Promise<{ queued: boolean }> {
+    const video = await this.findById(id);
+    await this.transcodeQueue.add(VIDEO_TRANSCODE_JOBS.PROCESS, {
+      videoId: video.id,
+      originalKey: video.originalKey,
+    });
+    return { queued: true };
+  }
+
   /** Called by the transcoder worker when a job finishes (success or failure). */
   async updateStatus(id: string, dto: UpdateVideoStatusDto): Promise<Video> {
     const video = await this.findById(id);

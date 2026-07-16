@@ -4,11 +4,19 @@ import { Movie } from './movie.entity';
 
 @Entity('banners')
 export class Banner extends BaseEntity {
-  @Column()
-  imageUrl: string;
+  /** Legacy static-image banners only — new banners are video-only (videoId).
+   * Kept nullable for backward compatibility with existing rows. */
+  @Column({ nullable: true })
+  imageUrl?: string;
 
   @Column({ nullable: true })
   title?: string;
+
+  /** Dedicated hero clip, uploaded directly for this banner — takes priority
+   * over the linked movie's own video (video-service lookup, FK by id only,
+   * same pattern as Movie/Episode/Short). Required for new banners. */
+  @Column({ name: 'video_id', nullable: true })
+  videoId?: string;
 
   @ManyToOne(() => Movie, { nullable: true, eager: true })
   @JoinColumn({ name: 'movie_id' })

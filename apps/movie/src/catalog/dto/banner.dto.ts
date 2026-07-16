@@ -2,9 +2,11 @@ import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
 import { IsBoolean, IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateBannerDto {
-  @ApiProperty()
+  /** Legacy static-image banners only — new banners are video-only. */
+  @ApiPropertyOptional()
+  @IsOptional()
   @IsString()
-  imageUrl: string;
+  imageUrl?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -15,6 +17,13 @@ export class CreateBannerDto {
   @IsOptional()
   @IsString()
   movieId?: string;
+
+  @ApiProperty({
+    description:
+      'video-service Video id — the hero clip this banner plays. Required — banners are video-only.',
+  })
+  @IsString()
+  videoId: string;
 
   @ApiPropertyOptional({ default: 0 })
   @IsOptional()
@@ -52,6 +61,11 @@ export class UpdateBannerDto {
   @IsOptional()
   @IsString()
   movieId?: string | null;
+
+  @ApiPropertyOptional({ description: 'video-service Video id — pass null to remove it.' })
+  @IsOptional()
+  @IsString()
+  videoId?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

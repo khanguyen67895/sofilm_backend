@@ -1,10 +1,10 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { DevicePlatform } from '../../entities/device.entity';
 
 export class LoginDto {
-  @ApiProperty()
-  @IsEmail()
+  @ApiProperty({ description: 'Email or username' })
+  @IsString()
   email: string;
 
   @ApiProperty()

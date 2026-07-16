@@ -1,6 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CopyObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import {
+  CopyObjectCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { createWriteStream } from 'fs';
+import { pipeline } from 'stream/promises';
+import type { Readable } from 'stream';
 
 /**
  * There is no real ffmpeg packaging step yet (see FfmpegPipelineService's own
@@ -41,5 +49,15 @@ export class S3OutputService {
     await this.client.send(
       new PutObjectCommand({ Bucket: this.bucket, Key: key, Body: body, ContentType: contentType }),
     );
+  }
+
+  /** Downloads an S3 object to a local path — ffmpeg needs a real file (or a
+   * URL it can stream), not a bare S3 key, to read frames from. */
+  async downloadToFile(sourceKey: string, localPath: string): Promise<void> {
+    const { Body } = await this.client.send(
+      new GetObjectCommand({ Bucket: this.bucket, Key: sourceKey }),
+    );
+    if (!Body) throw new Error(`Empty response body for S3 object "${sourceKey}"`);
+    await pipeline(Body as Readable, createWriteStream(localPath));
   }
 }

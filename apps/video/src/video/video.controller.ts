@@ -24,6 +24,15 @@ export class VideoController {
     return this.videoService.completeUpload(id);
   }
 
+  @Roles('ADMIN')
+  @Post(':id/generate-thumbnail')
+  @ApiOperation({
+    summary: 'Re-enqueue processing for a video, e.g. to (re)generate its thumbnail on demand',
+  })
+  generateThumbnail(@Param('id') id: string) {
+    return this.videoService.generateThumbnail(id);
+  }
+
   @Public()
   @Get(':id')
   @ApiOperation({ summary: 'Full video detail including qualities/subtitles/audio tracks' })

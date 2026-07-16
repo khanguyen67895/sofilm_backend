@@ -1,5 +1,13 @@
 import { ApiPropertyOptional, ApiProperty } from '@nestjs/swagger';
-import { IsArray, IsBoolean, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsArray,
+  IsBoolean,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 import { MovieType } from '../../entities/movie.entity';
 
 export class CreateMovieDto {
@@ -52,10 +60,11 @@ export class CreateMovieDto {
   @IsString()
   countryId?: string;
 
-  @ApiPropertyOptional({ type: [String] })
-  @IsOptional()
+  @ApiProperty({ type: [String], description: 'At least one genre is required' })
   @IsArray()
-  genreIds?: string[];
+  @ArrayNotEmpty({ message: 'genreIds must contain at least one genre' })
+  @IsString({ each: true })
+  genreIds: string[];
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()

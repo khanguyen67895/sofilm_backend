@@ -152,9 +152,52 @@ export class PaymentService {
       throw new NotFoundException('No pending payment found to reconcile with this webhook');
     }
 
+    await this.reconcilePayment(payment, {
+      providerTransactionId: result.providerTransactionId,
+      rawResponse: body,
+    });
+    return { success: true };
+  }
+
+  /**
+   * No provider here has real credentials configured (see each provider's own
+   * TODO), so no webhook will ever actually arrive to complete a checkout —
+   * that would leave the QR/payment-method screen waiting forever. This lets
+   * the authenticated owner of a still-PENDING payment simulate the provider
+   * confirming it, running the exact same reconciliation the webhook would.
+   * Safe only because it's scoped to the caller's own invoice — never expose
+   * this without that ownership check, and swap it for real webhook handling
+   * the moment a real gateway is wired up.
+   */
+  async confirmPayment(userId: string, invoiceId: string): Promise<{ success: boolean }> {
+    const payment = await this.payments.findOne({
+      where: { invoice: { id: invoiceId }, status: PaymentStatus.PENDING },
+      relations: ['invoice', 'invoice.plan'],
+      order: { createdAt: 'DESC' },
+    });
+    if (!payment) {
+      throw new NotFoundException(`No pending payment found for invoice "${invoiceId}"`);
+    }
+    if (payment.invoice.userId !== userId) {
+      throw new ForbiddenException();
+    }
+
+    await this.reconcilePayment(payment, {
+      providerTransactionId: `SIMULATED-${Date.now()}`,
+      rawResponse: { simulated: true },
+    });
+    return { success: true };
+  }
+
+  /** Shared by handleWebhook and confirmPayment (demo-only stand-in for a
+   * webhook) — marks the payment/invoice paid and activates the subscription. */
+  private async reconcilePayment(
+    payment: Payment,
+    result: { providerTransactionId?: string; rawResponse?: Record<string, unknown> },
+  ): Promise<void> {
     payment.status = PaymentStatus.SUCCESS;
     payment.providerTransactionId = result.providerTransactionId;
-    payment.rawResponse = body;
+    payment.rawResponse = result.rawResponse;
     await this.payments.save(payment);
 
     const invoice = payment.invoice;
@@ -198,8 +241,6 @@ export class PaymentService {
         `Failed to sync subscription tier for user "${invoice.userId}": ${(err as Error).message}`,
       );
     }
-
-    return { success: true };
   }
 
   async refund(paymentId: string, dto: RefundRequestDto): Promise<Refund> {

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { promises as fs } from 'fs';
+import { extname } from 'path';
 import ffmpeg from 'fluent-ffmpeg';
 import { S3OutputService } from './s3-output.service';
 
@@ -114,27 +115,28 @@ export class FfmpegPipelineService {
   ): Promise<string> {
     this.logger.log('generating thumbnail');
     const key = `thumbnails/${videoId}.jpg`;
-    const localPath = `/tmp/${videoId}.jpg`;
+    const localThumbPath = `/tmp/${videoId}.jpg`;
+    const localSourcePath = `/tmp/${videoId}-source${extname(originalKey) || '.mp4'}`;
 
-    // Real fluent-ffmpeg usage requires an ffmpeg binary on PATH and a real,
-    // locally-accessible input file — neither is guaranteed in this scaffold
-    // environment, so any failure here falls back to a placeholder object
-    // instead of failing the whole job.
+    // fluent-ffmpeg needs a real, locally-readable input file — `originalKey`
+    // is an S3 key, not a path, so it must be downloaded first. Still requires
+    // an ffmpeg binary on PATH; any failure (missing binary, corrupt upload,
+    // etc.) falls back to a placeholder object instead of failing the job.
     try {
+      await this.s3.downloadToFile(originalKey, localSourcePath);
       await new Promise<void>((resolve, reject) => {
-        ffmpeg(originalKey)
+        ffmpeg(localSourcePath)
           .on('end', () => resolve())
           .on('error', (err) => reject(err))
           .screenshots({
             count: 1,
             filename: `${videoId}.jpg`,
             folder: '/tmp',
-            timestamps: ['1'],
+            timestamps: ['10%'],
           });
       });
-      const generated = await fs.readFile(localPath);
+      const generated = await fs.readFile(localThumbPath);
       await this.s3.putObject(key, generated, 'image/jpeg');
-      await fs.unlink(localPath).catch(() => undefined);
     } catch (error) {
       this.logger.warn(
         `ffmpeg thumbnail generation unavailable, uploading placeholder instead (${(error as Error).message})`,
@@ -144,6 +146,9 @@ export class FfmpegPipelineService {
         Buffer.from(PLACEHOLDER_THUMBNAIL_JPEG_BASE64, 'base64'),
         'image/jpeg',
       );
+    } finally {
+      await fs.unlink(localThumbPath).catch(() => undefined);
+      await fs.unlink(localSourcePath).catch(() => undefined);
     }
 
     await this.delay(200);

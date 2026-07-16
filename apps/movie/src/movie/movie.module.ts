@@ -14,6 +14,7 @@ import { MovieService } from './movie.service';
 import { MovieController } from './movie.controller';
 import { VideoResolverService } from './video-resolver.service';
 import { EntitlementService } from './entitlement.service';
+import { NotificationBroadcastService } from './notification-broadcast.service';
 
 @Module({
   imports: [
@@ -31,7 +32,7 @@ import { EntitlementService } from './entitlement.service';
     HttpModule.register({ timeout: 10000 }),
   ],
   controllers: [MovieController],
-  providers: [MovieService, VideoResolverService, EntitlementService],
-  exports: [VideoResolverService],
+  providers: [MovieService, VideoResolverService, EntitlementService, NotificationBroadcastService],
+  exports: [VideoResolverService, NotificationBroadcastService],
 })
 export class MovieModule {}
