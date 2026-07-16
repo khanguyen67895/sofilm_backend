@@ -21,7 +21,9 @@ export class ProfileController {
 
   @Public()
   @Post('batch')
-  @ApiOperation({ summary: 'Hydrate a list of user ids to display name/avatar (used by review-service, etc.)' })
+  @ApiOperation({
+    summary: 'Hydrate a list of user ids to display name/avatar (used by review-service, etc.)',
+  })
   batch(@Body() dto: BatchUsersDto) {
     return this.profileService.batchByUserIds(dto.ids);
   }

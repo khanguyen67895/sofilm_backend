@@ -72,9 +72,7 @@ async function run() {
   });
 
   try {
-    const plans = app.get<Repository<SubscriptionPlan>>(
-      getRepositoryToken(SubscriptionPlan),
-    );
+    const plans = app.get<Repository<SubscriptionPlan>>(getRepositoryToken(SubscriptionPlan));
 
     for (const plan of PLANS) {
       const existing = await plans.findOne({ where: { id: plan.id } });

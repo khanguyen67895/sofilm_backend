@@ -52,6 +52,10 @@ export class ProfileService {
   ): Promise<Array<{ userId: string; displayName: string; avatar?: string }>> {
     if (!ids?.length) return [];
     const profiles = await this.profiles.find({ where: { userId: In([...new Set(ids)]) } });
-    return profiles.map((p) => ({ userId: p.userId, displayName: p.displayName, avatar: p.avatar }));
+    return profiles.map((p) => ({
+      userId: p.userId,
+      displayName: p.displayName,
+      avatar: p.avatar,
+    }));
   }
 }

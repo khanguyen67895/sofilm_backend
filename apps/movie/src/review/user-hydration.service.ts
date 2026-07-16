@@ -30,9 +30,7 @@ export class UserHydrationService {
     const baseUrl = this.config.get<string>('USER_SERVICE_URL') ?? 'http://localhost:3002';
 
     try {
-      const response = await firstValueFrom(
-        this.http.post(`${baseUrl}/users/batch`, { ids }),
-      );
+      const response = await firstValueFrom(this.http.post(`${baseUrl}/users/batch`, { ids }));
       const users: HydratedUser[] = response.data?.data ?? response.data ?? [];
       users.forEach((u) => result.set(u.userId, u));
     } catch (error) {

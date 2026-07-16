@@ -78,7 +78,9 @@ export class ReviewService {
     let sum = 0;
     for (const row of rated) {
       sum += row.rating;
-      const bucket = String(Math.min(5, Math.max(1, Math.round(row.rating)))) as keyof typeof breakdown;
+      const bucket = String(
+        Math.min(5, Math.max(1, Math.round(row.rating))),
+      ) as keyof typeof breakdown;
       breakdown[bucket] += 1;
     }
     for (const key of Object.keys(breakdown) as Array<keyof typeof breakdown>) {

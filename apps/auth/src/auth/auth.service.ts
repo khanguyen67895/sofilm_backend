@@ -42,8 +42,7 @@ export class AuthService {
     });
     if (existing) {
       if (existing.email === dto.email) throw new ConflictException('Email already registered');
-      if (existing.username === dto.username)
-        throw new ConflictException('Username already taken');
+      if (existing.username === dto.username) throw new ConflictException('Username already taken');
       throw new ConflictException('Phone number already registered');
     }
 
