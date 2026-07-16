@@ -13,7 +13,7 @@ export interface ShortDto {
   title: string;
   videoUrl: string;
   thumbnail: string;
-  movieSlug: string;
+  movieSlug?: string;
   likes: number;
   comments: number;
   isLiked: boolean;
@@ -24,7 +24,7 @@ export interface ShortAdminDto {
   title: string;
   videoUrl: string;
   thumbnail: string;
-  movieSlug: string;
+  movieSlug?: string;
   likes: number;
   comments: number;
   isActive: boolean;

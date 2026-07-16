@@ -12,9 +12,10 @@ export class Short extends BaseEntity {
   video: Video;
 
   /** Denormalized cache of the parent movie's slug (movie-service owns the real
-   * record, in its own database) — lets the feed link back without a cross-service call. */
-  @Column({ name: 'movie_slug' })
-  movieSlug: string;
+   * record, in its own database) — lets the feed link back without a cross-service call.
+   * Optional: a short doesn't have to be tied to a movie. */
+  @Column({ name: 'movie_slug', nullable: true })
+  movieSlug?: string;
 
   @Column({ name: 'likes_count', default: 0 })
   likesCount: number;

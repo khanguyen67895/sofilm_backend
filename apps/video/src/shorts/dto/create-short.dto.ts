@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString } from 'class-validator';
+import { IsOptional, IsString } from 'class-validator';
 
 export class CreateShortDto {
   @ApiProperty()
@@ -10,7 +10,8 @@ export class CreateShortDto {
   @IsString()
   videoId: string;
 
-  @ApiProperty()
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
-  movieSlug: string;
+  movieSlug?: string;
 }
