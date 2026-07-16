@@ -39,6 +39,7 @@ export class ProxyConfigService {
       banners: movie,
       videos: video,
       shorts: video,
+      images: video,
       search,
       history,
       recommendations: recommendation,
