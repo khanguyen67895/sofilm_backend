@@ -16,8 +16,7 @@ export function createServiceDataSource(
     port: parseInt(process.env.DB_PORT ?? '5432', 10),
     username: process.env.DB_USERNAME ?? 'sofilm',
     password: process.env.DB_PASSWORD ?? 'sofilm',
-    database:
-      process.env[`${serviceEnvPrefix}_DB_NAME`] ?? `${serviceEnvPrefix.toLowerCase()}_db`,
+    database: process.env[`${serviceEnvPrefix}_DB_NAME`] ?? `${serviceEnvPrefix.toLowerCase()}_db`,
     synchronize: false,
     ...options,
   });
