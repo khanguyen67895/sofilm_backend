@@ -47,6 +47,12 @@ export class Movie extends BaseEntity {
   @Column({ type: 'float', default: 0 })
   rating: number;
 
+  /** Count of reviews that carry a star rating — kept in sync alongside
+   * `rating` by ReviewService.syncMovieRating, same source of truth
+   * (reviews), so cards can show "★ 4.8 (128)" without a per-card query. */
+  @Column({ type: 'bigint', default: 0 })
+  reviewsCount: number;
+
   @Column({ type: 'bigint', default: 0 })
   views: number;
 

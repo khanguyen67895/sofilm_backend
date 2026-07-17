@@ -135,7 +135,7 @@ export class ReviewService {
   }
 
   private async syncMovieRating(movieId: string): Promise<void> {
-    const { average } = await this.getSummary(movieId);
-    await this.movies.update({ id: movieId }, { rating: average });
+    const { average, total } = await this.getSummary(movieId);
+    await this.movies.update({ id: movieId }, { rating: average, reviewsCount: total });
   }
 }
