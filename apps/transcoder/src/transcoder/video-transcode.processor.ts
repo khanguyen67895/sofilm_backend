@@ -8,7 +8,11 @@ export interface VideoTranscodeJobData {
   originalKey: string;
 }
 
-@Processor(QUEUE_NAMES.VIDEO_TRANSCODE)
+// ffmpeg is CPU/RAM-heavy and this worker shares a single EC2 host with every
+// other service in production — concurrency: 1 keeps at most one encode
+// running at a time instead of fighting other jobs (or other containers) for
+// the same CPU.
+@Processor(QUEUE_NAMES.VIDEO_TRANSCODE, { concurrency: 1 })
 @Injectable()
 export class VideoTranscodeProcessor extends WorkerHost {
   private readonly logger = new Logger(VideoTranscodeProcessor.name);

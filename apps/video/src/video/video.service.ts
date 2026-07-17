@@ -47,15 +47,14 @@ export class VideoService {
   }
 
   /**
-   * Called by the client once the direct-to-S3 upload has finished. The transcoder is not
-   * a working pipeline yet, so the raw uploaded file is served as-is via its public S3 URL
-   * and the video is marked READY immediately rather than waiting on transcode output.
+   * Called by the client once the direct-to-S3 upload has finished. Marks the
+   * video QUEUED and hands it to the transcoder — it only becomes READY (with
+   * real HLS URLs) once `updateStatus()` is PATCHed back by the worker.
    */
   async completeUpload(id: string): Promise<Video> {
     const video = await this.findById(id);
 
-    video.status = VideoStatus.READY;
-    video.hlsMasterPlaylistUrl = this.s3.getPublicUrl(video.originalKey);
+    video.status = VideoStatus.QUEUED;
     await this.videos.save(video);
 
     try {

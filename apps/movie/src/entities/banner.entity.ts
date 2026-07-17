@@ -12,6 +12,18 @@ export class Banner extends BaseEntity {
   @Column({ nullable: true })
   title?: string;
 
+  /** Short caption shown under the title on the hero — overrides the linked
+   * movie's own description when set. */
+  @Column({ type: 'text', nullable: true })
+  content?: string;
+
+  /** Explicit poster image for this banner — shown as the hero video's
+   * `poster` while it buffers, takes priority over the legacy `imageUrl` and
+   * the linked movie's own backdrop. Uploaded the same way as movie
+   * poster/backdrop (presigned S3 URL, no processing step). */
+  @Column({ name: 'thumbnail_url', nullable: true })
+  thumbnailUrl?: string;
+
   /** Dedicated hero clip, uploaded directly for this banner — takes priority
    * over the linked movie's own video (video-service lookup, FK by id only,
    * same pattern as Movie/Episode/Short). Required for new banners. */

@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { QueryFailedError } from 'typeorm';
 import { ApiErrorDto } from '../dto/api-response.dto';
 
 @Catch()
@@ -19,11 +20,24 @@ export class HttpExceptionFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     const isHttpException = exception instanceof HttpException;
-    const statusCode = isHttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+    const uniqueViolation = !isHttpException ? this.extractUniqueViolation(exception) : undefined;
 
-    const exceptionResponse = isHttpException ? exception.getResponse() : null;
-    const message = this.extractMessage(exceptionResponse, exception);
-    const errors = this.extractValidationErrors(exceptionResponse);
+    let statusCode: number;
+    let message: string;
+    let errors: Record<string, string[]> | undefined;
+
+    if (isHttpException) {
+      const exceptionResponse = exception.getResponse();
+      statusCode = exception.getStatus();
+      message = this.extractMessage(exceptionResponse, exception);
+      errors = this.extractValidationErrors(exceptionResponse);
+    } else if (uniqueViolation) {
+      statusCode = HttpStatus.CONFLICT;
+      message = uniqueViolation;
+    } else {
+      statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+      message = (exception as Error)?.message ?? 'Internal server error';
+    }
 
     if (statusCode >= 500) {
       this.logger.error(
@@ -35,6 +49,24 @@ export class HttpExceptionFilter implements ExceptionFilter {
     }
 
     response.status(statusCode).json(new ApiErrorDto(statusCode, message, request.url, errors));
+  }
+
+  /** Postgres unique_violation (23505) — every service hits this the same way
+   * (movie slugs, user emails, coupon codes, ...), so it's handled once here
+   * instead of a try/catch at every call site that inserts/updates a unique
+   * column. Falls back to a generic message if the driver ever doesn't give
+   * us the usual "Key (col)=(val) already exists." detail string. */
+  private extractUniqueViolation(exception: unknown): string | undefined {
+    if (!(exception instanceof QueryFailedError)) return undefined;
+    const driverError = exception.driverError as { code?: string; detail?: string };
+    if (driverError?.code !== '23505') return undefined;
+
+    const match = driverError.detail?.match(/^Key \(([^)]+)\)=\(([^)]+)\) already exists\.$/);
+    if (match) {
+      const [, column, value] = match;
+      return `${column} "${value}" already exists`;
+    }
+    return 'Duplicate value violates a unique constraint';
   }
 
   private extractMessage(exceptionResponse: unknown, exception: unknown): string {

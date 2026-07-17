@@ -7,6 +7,16 @@ export class Short extends BaseEntity {
   @Column()
   title: string;
 
+  /** Caption shown under the title on the vertical feed. */
+  @Column({ type: 'text', nullable: true })
+  content?: string;
+
+  /** Explicit poster image for this short — takes priority over the parent
+   * video's own auto-generated thumbnail. Uploaded the same way as movie
+   * poster/backdrop (presigned S3 URL, no processing step). */
+  @Column({ name: 'thumbnail_url', nullable: true })
+  thumbnailUrl?: string;
+
   @ManyToOne(() => Video)
   @JoinColumn({ name: 'video_id' })
   video: Video;

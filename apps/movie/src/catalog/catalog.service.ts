@@ -68,16 +68,20 @@ export class BannerService extends CrudService<Banner> {
   /** Active banners for the public hero — resolves a playable video URL, same
    * as MovieService.withVideoUrls, so the hero can autoplay a clip as its
    * background. The banner's own uploaded video (videoId) takes priority over
-   * the linked movie's video, letting admins pick a dedicated hero clip. */
+   * the linked movie's video, letting admins pick a dedicated hero clip.
+   * Capped to the 10 newest so the hero doesn't turn into an ever-growing
+   * carousel as admins add more banners over time — the admin's own manual
+   * "display order" still decides the sequence within that set of 10. */
   async findActive(): Promise<Banner[]> {
     const now = new Date();
     const banners = await this.repository.find({
       where: { isActive: true },
-      order: { order: 'ASC' },
+      order: { createdAt: 'DESC' },
+      take: 10,
     });
-    const windowed = banners.filter(
-      (b) => (!b.startAt || b.startAt <= now) && (!b.endAt || b.endAt >= now),
-    );
+    const windowed = banners
+      .filter((b) => (!b.startAt || b.startAt <= now) && (!b.endAt || b.endAt >= now))
+      .sort((a, b) => a.order - b.order);
 
     const videoIds = windowed
       .map((b) => b.videoId ?? b.movie?.videoId)

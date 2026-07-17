@@ -13,6 +13,16 @@ export class CreateBannerDto {
   @IsString()
   title?: string;
 
+  @ApiPropertyOptional({ description: 'Caption shown under the title on the hero.' })
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  @ApiPropertyOptional({ description: 'Poster image shown while the hero video buffers.' })
+  @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
+
   @ApiPropertyOptional({ description: 'Movie this banner links to and features on the hero.' })
   @IsOptional()
   @IsString()

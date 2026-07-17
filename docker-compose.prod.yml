@@ -180,6 +180,10 @@ services:
     environment:
       <<: *app-env
     # no ports — pure BullMQ worker, no HTTP server
+    # ffmpeg encodes are CPU/RAM-heavy — cap it so a transcode job can't
+    # starve every other container sharing this single-host deploy.
+    mem_limit: 2g
+    cpus: 2
 
   # ── Reverse proxy: TLS termination for the gateway only ────────────────────
   caddy:

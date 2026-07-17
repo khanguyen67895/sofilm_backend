@@ -6,9 +6,15 @@ import {
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
-import { createWriteStream } from 'fs';
+import { createWriteStream, promises as fs } from 'fs';
 import { pipeline } from 'stream/promises';
+import { extname, join } from 'path';
 import type { Readable } from 'stream';
+
+const CONTENT_TYPES: Record<string, string> = {
+  '.m3u8': 'application/vnd.apple.mpegurl',
+  '.ts': 'video/mp2t',
+};
 
 /**
  * There is no real ffmpeg packaging step yet (see FfmpegPipelineService's own
@@ -59,5 +65,18 @@ export class S3OutputService {
     );
     if (!Body) throw new Error(`Empty response body for S3 object "${sourceKey}"`);
     await pipeline(Body as Readable, createWriteStream(localPath));
+  }
+
+  /** Uploads every file in a local directory (an HLS quality variant's
+   * playlist + segments) to S3 under `${destPrefix}/`, flat — ffmpeg's HLS
+   * muxer writes a `.m3u8` and its `.ts` segments as sibling files, no
+   * subdirectories. */
+  async uploadDirectory(localDir: string, destPrefix: string): Promise<void> {
+    const files = await fs.readdir(localDir);
+    for (const file of files) {
+      const body = await fs.readFile(join(localDir, file));
+      const contentType = CONTENT_TYPES[extname(file)] ?? 'application/octet-stream';
+      await this.putObject(`${destPrefix}/${file}`, body, contentType);
+    }
   }
 }

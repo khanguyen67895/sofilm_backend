@@ -10,6 +10,19 @@ export class CreateShortDto {
   @IsString()
   videoId: string;
 
+  @ApiProperty({ required: false, description: 'Caption shown under the title on the feed.' })
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  @ApiProperty({
+    required: false,
+    description: "Poster image — overrides the video's own auto-generated thumbnail.",
+  })
+  @IsOptional()
+  @IsString()
+  thumbnailUrl?: string;
+
   @ApiProperty({ required: false })
   @IsOptional()
   @IsString()

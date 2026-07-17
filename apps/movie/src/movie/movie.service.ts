@@ -204,7 +204,12 @@ export class MovieService {
     return this.movies.findBy({ id: In(ids) });
   }
 
-  /** Cheap "trending" — all-time views, cached in Redis for a minute.
+  /** "Trending" = popularity relative to how long a title has been in the
+   * catalog, not raw all-time views (that's /movies/top-view) — otherwise an
+   * old title that racked up views over months would permanently outrank a
+   * new title that's genuinely hot right now. Standard hot-ranking decay
+   * (views / (age_days + 2)^1.5), computed at query time from existing
+   * columns, cached in Redis for a minute.
    * TODO(recommendation-service): replace with a rolling-window view-event score. */
   async trending(limit = 20): Promise<Movie[]> {
     const cached = await this.redis.getJson<Movie[]>(TRENDING_CACHE_KEY);
@@ -213,7 +218,10 @@ export class MovieService {
     const movies = await this.movies
       .createQueryBuilder('movie')
       .andWhere(PUBLIC_VISIBILITY_SQL)
-      .orderBy('movie.trendingScore', 'DESC')
+      .orderBy(
+        'movie.views / POWER(GREATEST(EXTRACT(EPOCH FROM (NOW() - movie.created_at)) / 86400.0, 0) + 2, 1.5)',
+        'DESC',
+      )
       .take(limit)
       .getMany();
     await this.redis.setJson(TRENDING_CACHE_KEY, movies, TRENDING_CACHE_TTL);
@@ -238,6 +246,19 @@ export class MovieService {
       .getMany();
   }
 
+  /** Highest-rated by average review score (`Movie.rating`, kept in sync by
+   * ReviewService.syncMovieRating on every rating change) — distinct from
+   * both `topView` (raw watch count) and `trending` (recency-weighted). */
+  async topRated(limit = 20): Promise<Movie[]> {
+    return this.movies
+      .createQueryBuilder('movie')
+      .andWhere(PUBLIC_VISIBILITY_SQL)
+      .orderBy('movie.rating', 'DESC')
+      .addOrderBy('movie.views', 'DESC')
+      .take(limit)
+      .getMany();
+  }
+
   /** Same-genre heuristic — recommendation-service owns the smarter version of this. */
   async recommend(slug: string, limit = 12): Promise<Movie[]> {
     const movie = await this.findBySlug(slug);
@@ -256,12 +277,17 @@ export class MovieService {
   }
 
   /** Public paginated browse — optionally filtered by genre slug (used by the
-   * category page's genre filter pills). */
+   * category page's genre filter pills). Defaults to newest-first; the
+   * homepage's "All Movies" preview passes `sort=title` instead so it doesn't
+   * just repeat the New Releases row's own ordering. */
   async list(query: MovieQueryDto): Promise<PaginatedResult<Movie>> {
-    const qb = this.movies
-      .createQueryBuilder('movie')
-      .andWhere(PUBLIC_VISIBILITY_SQL)
-      .orderBy('movie.createdAt', 'DESC');
+    const qb = this.movies.createQueryBuilder('movie').andWhere(PUBLIC_VISIBILITY_SQL);
+
+    if (query.sort === 'title') {
+      qb.orderBy('movie.title', 'ASC');
+    } else {
+      qb.orderBy('movie.createdAt', 'DESC');
+    }
 
     if (query.genre) {
       qb.innerJoin('movie.genres', 'genre').andWhere('genre.slug = :genre', {

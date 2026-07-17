@@ -121,6 +121,11 @@ jobs:
           # - Infra files (docker-compose.prod.yml, Caddyfile, .env.prod) are
           #   expected to already be provisioned on the box — CI only updates
           #   the application image, it doesn't push config files.
+          # - Migrations run via `docker compose run --rm <svc>` (one-off
+          #   container on the new image, against the still-running Postgres)
+          #   BEFORE `up -d` restarts the app containers — idempotent, exits
+          #   non-zero (failing the deploy) if a migration errors, so a bad
+          #   migration never reaches the point of serving traffic.
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name "AWS-RunShellScript" \
@@ -130,6 +135,7 @@ jobs:
               'cd /opt/sofilm-backend',
               'aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY',
               'docker pull $APP_IMAGE',
+              'for svc in auth user movie video history payment notification; do echo \"running migrations: \$svc\"; APP_IMAGE=$APP_IMAGE docker compose -f docker-compose.prod.yml --env-file .env.prod run --rm \$svc npm run migration:run:\$svc || exit 1; done',
               'APP_IMAGE=$APP_IMAGE docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --no-build',
               'docker image prune -f',
               'for i in \$(seq 1 15); do curl -sf http://localhost:3000/health && exit 0; echo \"waiting for gateway (\$i/15)\"; sleep 4; done; echo \"gateway did not become healthy\"; docker compose -f docker-compose.prod.yml --env-file .env.prod logs --tail=80 gateway; exit 1'

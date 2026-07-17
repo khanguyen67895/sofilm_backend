@@ -11,6 +11,7 @@ import { NotificationBroadcastService } from './notification-broadcast.service';
 export interface ShortDto {
   id: string;
   title: string;
+  content?: string;
   videoUrl: string;
   thumbnail: string;
   movieSlug?: string;
@@ -22,6 +23,7 @@ export interface ShortDto {
 export interface ShortAdminDto {
   id: string;
   title: string;
+  content?: string;
   videoUrl: string;
   thumbnail: string;
   movieSlug?: string;
@@ -65,8 +67,9 @@ export class ShortsService {
     const hydrated: ShortDto[] = items.map((s) => ({
       id: s.id,
       title: s.title,
+      content: s.content,
       videoUrl: s.video?.hlsMasterPlaylistUrl ?? '',
-      thumbnail: s.video?.thumbnailUrl ?? '',
+      thumbnail: s.thumbnailUrl ?? s.video?.thumbnailUrl ?? '',
       movieSlug: s.movieSlug,
       likes: s.likesCount,
       comments: s.commentsCount,
@@ -102,6 +105,8 @@ export class ShortsService {
     const saved = await this.shorts.save(
       this.shorts.create({
         title: dto.title,
+        content: dto.content,
+        thumbnailUrl: dto.thumbnailUrl,
         video,
         movieSlug: dto.movieSlug,
       }),
@@ -110,7 +115,7 @@ export class ShortsService {
     await this.notificationBroadcast.notifyNewContent(
       `Video ngắn mới: ${saved.title}`,
       'Video ngắn mới vừa được thêm vào SoFilm.',
-      { thumbnail: video.thumbnailUrl, link: `/shorts` },
+      { thumbnail: saved.thumbnailUrl ?? video.thumbnailUrl, link: `/shorts` },
     );
 
     return saved;
@@ -128,8 +133,9 @@ export class ShortsService {
     const hydrated: ShortAdminDto[] = items.map((s) => ({
       id: s.id,
       title: s.title,
+      content: s.content,
       videoUrl: s.video?.hlsMasterPlaylistUrl ?? '',
-      thumbnail: s.video?.thumbnailUrl ?? '',
+      thumbnail: s.thumbnailUrl ?? s.video?.thumbnailUrl ?? '',
       movieSlug: s.movieSlug,
       likes: s.likesCount,
       comments: s.commentsCount,

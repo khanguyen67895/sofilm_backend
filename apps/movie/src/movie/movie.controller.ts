@@ -84,6 +84,13 @@ export class MovieController {
   }
 
   @Public()
+  @Get('top-rated')
+  @ApiOperation({ summary: 'Highest-rated (by average review score)' })
+  topRated(@Query('limit') limit?: number) {
+    return this.movieService.topRated(limit ? Number(limit) : undefined);
+  }
+
+  @Public()
   @Get('search')
   @ApiOperation({ summary: 'Simple title search (see search-service for full-text/ES search)' })
   search(@Query('q') q: string, @Query() query: PaginationQueryDto) {
