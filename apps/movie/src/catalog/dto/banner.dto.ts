@@ -23,10 +23,12 @@ export class CreateBannerDto {
   @IsString()
   thumbnailUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Movie this banner links to and features on the hero.' })
-  @IsOptional()
+  @ApiProperty({
+    description:
+      'Movie this banner links to and features on the hero — required so Watch Now/More Info on the public hero always have a destination.',
+  })
   @IsString()
-  movieId?: string;
+  movieId: string;
 
   @ApiProperty({
     description:
