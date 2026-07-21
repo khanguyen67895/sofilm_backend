@@ -7,6 +7,7 @@ import s3Config from './namespaces/s3.config';
 import elasticsearchConfig from './namespaces/elasticsearch.config';
 import mailConfig from './namespaces/mail.config';
 import paymentConfig from './namespaces/payment.config';
+import socialConfig from './namespaces/social.config';
 import { validationSchema } from './validation.schema';
 
 @Module({
@@ -22,6 +23,7 @@ import { validationSchema } from './validation.schema';
         elasticsearchConfig,
         mailConfig,
         paymentConfig,
+        socialConfig,
       ],
       validationSchema,
       validationOptions: { abortEarly: false },
